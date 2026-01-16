@@ -32,6 +32,8 @@ class Config:
                             'decision']
 
         self.xgb_model_34 = os.getenv("XGB_MODEL_34", BASE_DIR / "models" / "xgboost_34_credit_score.pkl")
+        self.rf_model_34 = os.getenv("XGB_MODEL_34", BASE_DIR / "models" / "random_forest_34_credit_score.pkl")
+        self.cab_model_34 = os.getenv("XGB_MODEL_34", BASE_DIR / "models" / "catboost_34_credit_score.pkl")
 
         self.testing_csv_path = os.getenv("CSV_PATH", BASE_DIR / "data" / "testing_dataset_final.csv")
         self.csv_general = os.getenv("CSV_GENERAL", BASE_DIR / "data" / "merged_dataset_with_name.csv")

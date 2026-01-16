@@ -9,6 +9,8 @@ from datetime import datetime
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, classification_report, confusion_matrix
 from catboost import CatBoostClassifier
 from sklearn.ensemble import RandomForestClassifier
+from catboost import Pool
+
 import numpy as np
 import json
 
@@ -61,6 +63,25 @@ def load_prediction_model(model_name: str):
             model = joblib.load(config.xgb_model_34)
         elif model_name == "feature_engineered_model":
             model = joblib.load(config.xgb_engineered_model)
+        else:
+            model = None
+        
+        mlflow.set_tag("model_source", model_name)
+        logger.info("Model loaded from %s", model_name)
+        return model
+    except Exception as e:
+        logger.error("Error loading model %s: %s", model_name, str(e))
+        raise RuntimeError(f"Failed to load model {model_name}") from e
+
+
+def load_prediction_models(model_name: str):
+    try:
+        if model_name == "xgboost":
+            model = joblib.load(config.xgb_model_34)
+        elif model_name == "random_forest":
+            model = joblib.load(config.rf_model_34)
+        elif model_name == "catboost":
+            model = joblib.load(config.cab_model_34)
         else:
             model = None
         
@@ -154,18 +175,8 @@ def predict_single_sample_data(model, sample_data, target_column, model_name):
     if len(sample_data) != 1:
         raise ValueError("This function supports ONLY a single row of data.")
 
-    if model_name == "model_34":
-        prediction = model.predict(sample_data)
-        prediction_class_index = int(np.argmax(prediction))
-    else:
-        model_features = model.feature_names
-        sample_data = sample_data[model_features]
-
-        dmatrix = xgb.DMatrix(sample_data, feature_names=model_features)
-
-        prediction = model.predict(dmatrix)[0]
-
-        prediction_class_index = int(np.argmax(prediction))
+    prediction = model.predict(sample_data)
+    prediction_class_index = int(np.argmax(prediction))
 
     target_column = load_features(target_column)
     prediction_class_name = target_column[prediction_class_index]
@@ -204,40 +215,56 @@ def build_contribution_tables(sample_data, shap_values, pred_class_index):
 
 def build_contribution_table(sample_data, shap_values, pred_class_index):
     """
-    Build contribution table for a single sample, supporting:
-    - shap_values as a list of arrays (old TreeExplainer)
-    - shap_values as shap.Explanation object (new API)
+    Build contribution table for a single sample.
+    Supports:
+    - CatBoost SHAP (list of per-class arrays)
+    - shap.Explanation (XGB / RF)
     """
+
     if isinstance(sample_data, pd.Series):
         sample_data = sample_data.to_frame().T
 
-    feature_names = sample_data.columns.tolist()
+    feature_names = list(sample_data.columns)
 
-    # Determine the correct SHAP values array
     if isinstance(shap_values, list):
-        # list of arrays per class
-        class_shap_values = shap_values[pred_class_index][0, :]
+        class_shap_values = shap_values[pred_class_index][0]
     elif hasattr(shap_values, "values"):
         values = shap_values.values
-        if values.ndim == 3:  # multi-class
+        if values.ndim == 3:  # multiclass
             class_shap_values = values[0, :, pred_class_index]
-        elif values.ndim == 2:  # binary or regression
-            class_shap_values = values[0, :]
+        elif values.ndim == 2:
+            class_shap_values = values[0]
         else:
             raise ValueError(f"Unsupported SHAP shape: {values.shape}")
     else:
-        raise TypeError(
-            f"Unsupported shap_values type: {type(shap_values)}. Must be list or shap.Explanation."
+        raise TypeError(f"Unsupported shap_values type: {type(shap_values)}")
+
+    class_shap_values = np.asarray(class_shap_values).ravel()
+    feature_values = sample_data.iloc[0].to_numpy().ravel()
+
+    if not (
+        len(feature_names)
+        == len(class_shap_values)
+        == len(feature_values)
+    ):
+        raise ValueError(
+            f"Length mismatch:\n"
+            f"features={len(feature_names)}, "
+            f"shap={len(class_shap_values)}, "
+            f"values={len(feature_values)}"
         )
 
-    contribution_table = pd.DataFrame({
-        'Feature': feature_names,
-        'SHAP Value': class_shap_values,
-        'Feature Value': sample_data.iloc[0].values
-    }).sort_values(by='SHAP Value', key=abs, ascending=False)
+    contribution_table = (
+        pd.DataFrame({
+            "Feature": feature_names,
+            "SHAP Value": class_shap_values,
+            "Feature Value": feature_values,
+        })
+        .sort_values(by="SHAP Value", key=lambda x: x.abs(), ascending=False)
+        .reset_index(drop=True)
+    )
 
     return contribution_table
-
 
 def apply_feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
 

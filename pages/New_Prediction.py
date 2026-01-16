@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-from src.inference_pipeline import match_inputs, run_predictions
+from src.inference_pipeline import match_inputs, run_inferences
 from config.config import config
 
 st.set_page_config(page_title="New Prediction", layout="wide")
@@ -37,79 +37,49 @@ if st.button("Run Prediction"):
     st.info("Running evaluation… please wait.")
 
     try:
-        result_34 = run_predictions(model_name="model_34", original_data=original_df, selected_data=selected_df_34, feature_column=config.feature_column_34, target_column=config.target_column_34)
+        result_xgboost = run_inferences(model_name="xgboost", original_data=original_df, selected_data=selected_df_34, feature_column=config.feature_column_34, target_column=config.target_column_34)
+        result_random_forest = run_inferences(model_name="random_forest", original_data=original_df, selected_data=selected_df_34, feature_column=config.feature_column_34, target_column=config.target_column_34)
 
-        st.success(f"Batch Evaluation Completed! Records processed: {result_34['records_processed']}")
+        st.success(f"Batch Evaluation Completed! Records processed: {result_xgboost['records_processed']}")
         st.write("---")
 
-        evaluations_34 = result_34["evaluations"]
+        evaluations_xgboost = result_xgboost["evaluations"]
+        evaluations_random_forest = result_random_forest["evaluations"]
 
         st.header("Evaluation Output")
 
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2 = st.columns(2)
 
         with col1:
-            st.subheader("Result with 18 Data Points")
-            for i, eval_row in enumerate(evaluations_34):
+            st.subheader("Result with Xgboost Model")
+            for i, eval_row in enumerate(evaluations_xgboost):
                 with st.expander(f"Record #{i+1} — Prediction with {eval_row['model_name']}: {eval_row['predicted_class_name']}"):
                     
                     st.subheader("Prediction")
                     st.write(f"**Model Name**: {eval_row['model_name']}")
                     st.write(f"**Predicted Class**: {eval_row['predicted_class_name']}")
 
-                    st.subheader("Top Feature Contributions (SHAP)")
+                    st.subheader("Top Feature Contributions")
                     contrib_df = pd.DataFrame(eval_row["top_feature_contributions"])
                     st.table(contrib_df)
 
-                    st.subheader("RAG Explanation")
+                    st.subheader("Explanation")
                     st.write(eval_row["rag_explanation"])
 
         with col2:
-            st.subheader("Result with 44 Data Points")
-            for i, eval_row in enumerate(evaluations_34):
+            st.subheader("Result with Random Forest Model")
+            for i, eval_row in enumerate(evaluations_random_forest):
                 with st.expander(f"Record #{i+1} — Prediction with {eval_row['model_name']}: {eval_row['predicted_class_name']}"):
                     
                     st.subheader("Prediction")
                     st.write(f"**Model Name**: {eval_row['model_name']}")
                     st.write(f"**Predicted Class**: {eval_row['predicted_class_name']}")
 
-                    st.subheader("Top Feature Contributions (SHAP)")
+                    st.subheader("Top Feature Contributions")
                     contrib_df = pd.DataFrame(eval_row["top_feature_contributions"])
                     st.table(contrib_df)
 
-                    st.subheader("RAG Explanation")
-                    st.write(eval_row["rag_explanation"])
-
-        with col3:
-            st.subheader("Result with 44 Data Points")
-            for i, eval_row in enumerate(evaluations_34):
-                with st.expander(f"Record #{i+1} — Prediction with {eval_row['model_name']}: {eval_row['predicted_class_name']}"):
-                    
-                    st.subheader("Prediction")
-                    st.write(f"**Model Name**: {eval_row['model_name']}")
-                    st.write(f"**Predicted Class**: {eval_row['predicted_class_name']}")
-
-                    st.subheader("Top Feature Contributions (SHAP)")
-                    contrib_df = pd.DataFrame(eval_row["top_feature_contributions"])
-                    st.table(contrib_df)
-
-                    st.subheader("RAG Explanation")
-                    st.write(eval_row["rag_explanation"])
-
-        with col4:
-            st.subheader("Result with Feature Engineered Data Points")
-            for i, eval_row in enumerate(evaluations_34):
-                with st.expander(f"Record #{i+1} — Prediction with {eval_row['model_name']}: {eval_row['predicted_class_name']}"):
-                    
-                    st.subheader("Prediction")
-                    st.write(f"**Model Name**: {eval_row['model_name']}")
-                    st.write(f"**Predicted Class**: {eval_row['predicted_class_name']}")
-
-                    st.subheader("Top Feature Contributions (SHAP)")
-                    contrib_df = pd.DataFrame(eval_row["top_feature_contributions"])
-                    st.table(contrib_df)
-
-                    st.subheader("RAG Explanation")
+                    st.subheader("Explanation")
                     st.write(eval_row["rag_explanation"])
 
         st.write("---")
