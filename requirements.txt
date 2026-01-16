@@ -1,0 +1,12 @@
+streamlit
+pandas
+numpy
+matplotlib
+seaborn
+plotly
+ydata-profiling
+scikit-learn
+pyyaml
+setuptools
+wheel
+google-genai
