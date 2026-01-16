@@ -59,8 +59,8 @@ def load_prediction_model(model_name: str):
             model = joblib.load(config.xgb_model_18)
         elif model_name == "model_44":
             model = joblib.load(config.xgb_model_44)
-        elif model_name == "model_34":
-            model = joblib.load(config.xgb_model_34)
+        elif model_name == "model_36":
+            model = joblib.load(config.xgb_model_36)
         elif model_name == "feature_engineered_model":
             model = joblib.load(config.xgb_engineered_model)
         else:
@@ -77,11 +77,11 @@ def load_prediction_model(model_name: str):
 def load_prediction_models(model_name: str):
     try:
         if model_name == "xgboost":
-            model = joblib.load(config.xgb_model_34)
+            model = joblib.load(config.xgb_model_36)
         elif model_name == "random_forest":
-            model = joblib.load(config.rf_model_34)
+            model = joblib.load(config.rf_model_36)
         elif model_name == "catboost":
-            model = joblib.load(config.cab_model_34)
+            model = joblib.load(config.cab_model_36)
         else:
             model = None
         

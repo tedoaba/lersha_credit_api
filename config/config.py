@@ -18,7 +18,7 @@ class Config:
         self.target_column = os.getenv("TARGET_COLUMN", "decision")
         self.id_column = os.getenv("ID_COLUMN", "farmer_uid")
         
-        self.columns_34 = ['gender', 'age_group', 'family_size', 'typeofhouse',
+        self.columns_36 = ['gender', 'age_group', 'family_size', 'typeofhouse',
                             'asset_ownership', 'water_reserve_access', 'output_storage_type',
                             'decision_making_role', 'hasrusacco', 'haslocaledir',
                             'primaryoccupation', 'holdsleadershiprole', 'land_title',
@@ -31,15 +31,15 @@ class Config:
                             'total_estimated_income', 'total_estimated_cost', 'net_income',
                             'decision']
 
-        self.xgb_model_34 = os.getenv("XGB_MODEL_34", BASE_DIR / "models" / "xgboost_34_credit_score.pkl")
-        self.rf_model_34 = os.getenv("XGB_MODEL_34", BASE_DIR / "models" / "random_forest_34_credit_score.pkl")
-        self.cab_model_34 = os.getenv("XGB_MODEL_34", BASE_DIR / "models" / "catboost_34_credit_score.pkl")
+        self.xgb_model_36 = os.getenv("XGB_MODEL_36", BASE_DIR / "models" / "xgboost_36_credit_score.pkl")
+        self.rf_model_36 = os.getenv("XGB_MODEL_36", BASE_DIR / "models" / "random_forest_36_credit_score.pkl")
+        self.cab_model_36 = os.getenv("XGB_MODEL_36", BASE_DIR / "models" / "catboost_36_credit_score.pkl")
 
         self.testing_csv_path = os.getenv("CSV_PATH", BASE_DIR / "data" / "testing_dataset_final.csv")
         self.csv_general = os.getenv("CSV_GENERAL", BASE_DIR / "data" / "merged_dataset_with_name.csv")
 
-        self.feature_column_34 = os.getenv("FEATURE_COLUMN_34", BASE_DIR / "models" / "34_feature_columns.pkl")
-        self.target_column_34 = os.getenv("TARGET_COLUMN_34", BASE_DIR / "models" / "34_label_classes.pkl")
+        self.feature_column_36 = os.getenv("FEATURE_COLUMN_36", BASE_DIR / "models" / "36_feature_columns.pkl")
+        self.target_column_36 = os.getenv("TARGET_COLUMN_36", BASE_DIR / "models" / "36_label_classes.pkl")
 
         self.db_uri = os.getenv("DB_URI")
         self.db_table = os.getenv("DB_TABLE")

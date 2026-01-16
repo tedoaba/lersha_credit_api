@@ -18,17 +18,17 @@ logger = get_logger(__name__)
 def match_inputs(source=None, filters=None, number_of_rows=None):
     if source == "Single Value":
         original_data = fetch_raw_data(table_name=config.farmer_data_all, filters=filters)
-        initial_data_34 = apply_feature_engineering(original_data)
-        selected_data_34 = get_candidate_data(initial_data_34, config.columns_34)
+        initial_data_36 = apply_feature_engineering(original_data)
+        selected_data_36 = get_candidate_data(initial_data_36, config.columns_36)
     elif source == "Batch Prediction":
         # number_of_rows = 3
         original_data = fetch_multiple_raw_data(table_name=config.farmer_data_all, n_rows=number_of_rows)
-        initial_data_34 = apply_feature_engineering(original_data)
-        selected_data_34 = get_candidate_data(initial_data_34, config.columns_34)
+        initial_data_36 = apply_feature_engineering(original_data)
+        selected_data_36 = get_candidate_data(initial_data_36, config.columns_36)
     else:
         raise ValueError("Invalid data source. Choose 'database' or 'csv'.")
 
-    return original_data, selected_data_34
+    return original_data, selected_data_36
 
 
 def run_inferences(model_name, original_data, selected_data, feature_column, target_column):

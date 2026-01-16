@@ -11,15 +11,15 @@ def infer(source, farmer_uid=None, number_of_rows=None):
     if source == "Single Value":
         farmer_uid = "Farmer UID"
         if farmer_uid:
-            original_df, selected_df_34 = match_inputs(source=source, filters=farmer_uid)
+            original_df, selected_df_36 = match_inputs(source=source, filters=farmer_uid)
 
 
     elif source == "Batch Prediction":
-        original_df, selected_df_34 = match_inputs(source=source, number_of_rows=number_of_rows)
+        original_df, selected_df_36 = match_inputs(source=source, number_of_rows=number_of_rows)
         logger.info(f"Fetched {number_of_rows} rows from database for evaluation.")
 
-    result_xgboost = run_inferences(model_name="xgboost", original_data=original_df, selected_data=selected_df_34, feature_column=config.feature_column_34, target_column=config.target_column_34)
-    result_random_forest = run_inferences(model_name="random_forest", original_data=original_df, selected_data=selected_df_34, feature_column=config.feature_column_34, target_column=config.target_column_34)
+    result_xgboost = run_inferences(model_name="xgboost", original_data=original_df, selected_data=selected_df_36, feature_column=config.feature_column_36, target_column=config.target_column_36)
+    result_random_forest = run_inferences(model_name="random_forest", original_data=original_df, selected_data=selected_df_36, feature_column=config.feature_column_36, target_column=config.target_column_36)
 
     logger.info(f"Batch Evaluation Completed! Records processed: {result_xgboost['records_processed']}")
 

@@ -21,14 +21,14 @@ original_df = None
 if source == "Single Value":
     filters = st.text_input("Farmer UID")
     if filters:
-        original_df, selected_df_34 = match_inputs(source=source, filters=filters)
+        original_df, selected_df_36 = match_inputs(source=source, filters=filters)
         st.dataframe(original_df.head())
 
 
 elif source == "Batch Prediction":
     st.info("Evaluation will run using the CSV file defined inside your backend config.")
     number_of_rows = st.number_input("Number of rows to process", min_value=1, max_value=10, step=1)
-    original_df, selected_df_34 = match_inputs(source=source, number_of_rows=number_of_rows)
+    original_df, selected_df_36 = match_inputs(source=source, number_of_rows=number_of_rows)
     st.success(f"Fetched {number_of_rows} rows from database for evaluation.")
     st.dataframe(original_df.head())
 
@@ -37,8 +37,8 @@ if st.button("Run Prediction"):
     st.info("Running evaluation… please wait.")
 
     try:
-        result_xgboost = run_inferences(model_name="xgboost", original_data=original_df, selected_data=selected_df_34, feature_column=config.feature_column_34, target_column=config.target_column_34)
-        result_random_forest = run_inferences(model_name="random_forest", original_data=original_df, selected_data=selected_df_34, feature_column=config.feature_column_34, target_column=config.target_column_34)
+        result_xgboost = run_inferences(model_name="xgboost", original_data=original_df, selected_data=selected_df_36, feature_column=config.feature_column_36, target_column=config.target_column_36)
+        result_random_forest = run_inferences(model_name="random_forest", original_data=original_df, selected_data=selected_df_36, feature_column=config.feature_column_36, target_column=config.target_column_36)
 
         st.success(f"Batch Evaluation Completed! Records processed: {result_xgboost['records_processed']}")
         st.write("---")
