@@ -33,7 +33,7 @@ class Config:
 
         self.xgb_model_34 = os.getenv("XGB_MODEL_34", BASE_DIR / "models" / "xgboost_34_credit_score.pkl")
 
-        self.testing_csv_path = os.getenv("CSV_PATH", BASE_DIR / "data" / "test/testing_dataset_final.csv")
+        self.testing_csv_path = os.getenv("CSV_PATH", BASE_DIR / "data" / "testing_dataset_final.csv")
         self.csv_general = os.getenv("CSV_GENERAL", BASE_DIR / "data" / "merged_dataset_with_name.csv")
 
         self.feature_column_34 = os.getenv("FEATURE_COLUMN_34", BASE_DIR / "models" / "34_feature_columns.pkl")
