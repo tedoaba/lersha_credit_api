@@ -46,6 +46,7 @@ class Config:
         self.candidate_result = os.getenv("CANDIDATE_RESULT", "candidate_result")
         self.farmer_data_all = os.getenv("FARMER_DATA_ALL")
 
+        self.prompt_path = os.getenv("PROMPT_PATH", BASE_DIR / "prompts" / "prompts.yaml")
         self.gemini_model_id = os.getenv("GEMINI_MODEL")
         self.gemini_api_key = os.getenv("GEMINI_API_KEY")
         self.embedder_model = os.getenv("EMBEDDER_MODEL", "all-MiniLM-L6-v2")
