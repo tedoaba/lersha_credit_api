@@ -1,0 +1,2 @@
+*.pkl filter=lfs diff=lfs merge=lfs -text
+notebooks/models/random_forest_credit_score.pkl filter=lfs diff=lfs merge=lfs -text
