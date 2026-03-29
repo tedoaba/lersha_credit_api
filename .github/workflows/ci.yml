@@ -5,6 +5,7 @@ on:
     branches: ["**"]
   pull_request:
     branches: ["main"]
+  workflow_dispatch:  # Allow manual pipeline trigger from any branch
 
 jobs:
   # ── Lint ────────────────────────────────────────────────────────────────────
@@ -95,6 +96,22 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Validate compose files (base + prod)
+        env:
+          POSTGRES_USER: lersha
+          POSTGRES_PASSWORD: lersha
+          POSTGRES_DB: lersha
+          DB_USER: lersha
+          DB_PASSWORD: lersha
+          API_KEY: ci-placeholder
+          GEMINI_MODEL: gemini-1.5-pro
+          GEMINI_API_KEY: ci-placeholder
+          MLFLOW_S3_BUCKET: ci-placeholder-bucket
+          AWS_ACCESS_KEY_ID: ci-placeholder
+          AWS_SECRET_ACCESS_KEY: ci-placeholder
+          REDIS_URL: redis://redis:6379/0
+        run: docker compose -f docker-compose.yml -f docker-compose.prod.yml config > /dev/null
 
       - name: Build backend image
         run: docker build -f backend/Dockerfile -t lersha-backend:ci .
