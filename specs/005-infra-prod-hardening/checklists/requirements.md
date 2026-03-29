@@ -40,4 +40,4 @@ All items passed on first iteration. Key decisions documented in Assumptions:
 - Celery task code is pre-existing; this spec covers compose wiring only.
 - Docker secrets files must be created by the operator before stack startup.
 
-**Status**: ✅ READY for `/speckit-plan`
+**Status**: ✅ IMPLEMENTED — all 27 tasks complete (2026-03-29)

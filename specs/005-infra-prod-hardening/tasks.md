@@ -18,9 +18,9 @@ Validation is done via `docker compose config`, `make typecheck`, `make pre-comm
 
 **Purpose**: Pre-conditions and gitignore/env hygiene that everything else depends on.
 
-- [ ] T001 Add `secrets/` and `backups/` entries to `.gitignore`
-- [ ] T002 [P] Create `secrets/` directory with placeholder `README.md` explaining expected file names (`api_key`, `gemini_api_key`) and that they are gitignored
-- [ ] T003 [P] Create `backups/` directory with placeholder `.gitkeep` so the mount point exists before the backup service runs
+- [x]  Add `secrets/` and `backups/` entries to `.gitignore`
+- [x]  [P] Create `secrets/` directory with placeholder `README.md` explaining expected file names (`api_key`, `gemini_api_key`) and that they are gitignored
+- [x]  [P] Create `backups/` directory with placeholder `.gitkeep` so the mount point exists before the backup service runs
 
 ---
 
@@ -30,10 +30,10 @@ Validation is done via `docker compose config`, `make typecheck`, `make pre-comm
 
 **⚠️ CRITICAL**: Phases 3–10 cannot begin until this phase is complete.
 
-- [ ] T004 [P] Add `_read_secret(name: str, env_var: str) -> str | None` helper function to `backend/config/config.py` (reads from `/run/secrets/{name}` if the file exists, otherwise falls back to `os.getenv(env_var)`; always `.strip()` the result)
-- [ ] T005 [P] Apply `_read_secret` to `api_key` assignment in `backend/config/config.py`: replace `os.getenv("API_KEY")` with `_read_secret("api_key", "API_KEY")`; keep existing `ValueError` guard immediately after
-- [ ] T006 [P] Apply `_read_secret` to `gemini_api_key` assignment in `backend/config/config.py`: replace `os.getenv("GEMINI_API_KEY")` with `_read_secret("gemini_api_key", "GEMINI_API_KEY")`; keep existing `ValueError` guard immediately after
-- [ ] T007 [P] Update `.env.example` — add the following new sections below the existing `Redis / Celery` section:
+- [x]  [P] Add `_read_secret(name: str, env_var: str) -> str | None` helper function to `backend/config/config.py` (reads from `/run/secrets/{name}` if the file exists, otherwise falls back to `os.getenv(env_var)`; always `.strip()` the result)
+- [x]  [P] Apply `_read_secret` to `api_key` assignment in `backend/config/config.py`: replace `os.getenv("API_KEY")` with `_read_secret("api_key", "API_KEY")`; keep existing `ValueError` guard immediately after
+- [x]  [P] Apply `_read_secret` to `gemini_api_key` assignment in `backend/config/config.py`: replace `os.getenv("GEMINI_API_KEY")` with `_read_secret("gemini_api_key", "GEMINI_API_KEY")`; keep existing `ValueError` guard immediately after
+- [x]  [P] Update `.env.example` — add the following new sections below the existing `Redis / Celery` section:
   ```
   # ─── MLflow artifact store ───────────────────────────────────────────────────
   MLFLOW_S3_BUCKET=lersha-mlflow-artifacts
@@ -60,7 +60,7 @@ Validation is done via `docker compose config`, `make typecheck`, `make pre-comm
 
 **Independent Test**: Start prod stack → `curl -k https://your-domain.com/health` returns `{"db":"ok","chroma":"ok"}`. Caddy logs show certificate issued.
 
-- [ ] T008 [US1] Create `Caddyfile` at project root with the following content:
+- [x]  [US1] Create `Caddyfile` at project root with the following content:
   ```
   your-domain.com {
       reverse_proxy /v1/* backend:8000
@@ -79,7 +79,7 @@ Validation is done via `docker compose config`, `make typecheck`, `make pre-comm
 
 ### Phase 4a — Restructure `docker-compose.yml` (base)
 
-- [ ] T009 [US2] Rewrite `docker-compose.yml` as the base-only file:
+- [x]  [US2] Rewrite `docker-compose.yml` as the base-only file:
   - **Remove** all host `ports:` bindings from every service (postgres, redis, backend, ui, mlflow)
   - **Uncomment** the worker service block; remove the comment header and make it a full active service definition with: `build.dockerfile: backend/Dockerfile`, `command: uv run celery -A backend.worker worker --loglevel=info`, `restart: unless-stopped`, `depends_on: {redis: {condition: service_healthy}, postgres: {condition: service_healthy}}`, `env_file: .env`, `environment: {DB_URI: "postgresql://${POSTGRES_USER:-lersha}:${POSTGRES_PASSWORD:-lersha}@postgres:5432/${POSTGRES_DB:-lersha}", REDIS_URL: "redis://redis:6379/0", MLFLOW_TRACKING_URI: "http://mlflow:5000"}`, `volumes: [./backend/models:/app/backend/models:ro, chroma_data:/app/chroma_db, mlruns_data:/app/mlruns, ./output:/app/output, ./logs:/app/logs]`
   - **Keep** healthchecks on postgres and redis
@@ -88,7 +88,7 @@ Validation is done via `docker compose config`, `make typecheck`, `make pre-comm
 
 ### Phase 4b — Create `docker-compose.override.yml` (dev)
 
-- [ ] T010 [US2] Create `docker-compose.override.yml` at project root with dev overrides only:
+- [x]  [US2] Create `docker-compose.override.yml` at project root with dev overrides only:
   - `postgres`: add `ports: ["5432:5432"]`
   - `redis`: add `ports: ["6379:6379"]`
   - `backend`: add `command: uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000`, add `ports: ["8000:8000"]`, add bind mounts `volumes: [./backend:/app/backend, ./ui:/app/ui]` (in addition to base volumes — compose merges these)
@@ -103,7 +103,7 @@ Validation is done via `docker compose config`, `make typecheck`, `make pre-comm
 
 **Independent Test**: Stop backend; create `secrets/api_key` with a test value; start prod stack → backend starts and `GET /health` succeeds → `docker inspect lersha-backend` shows no `API_KEY` in `Env` array.
 
-- [ ] T011 [US3] Create `docker-compose.prod.yml` at project root — **this is the primary deliverable file for Phases 5, 6, 7, 8**. Structure:
+- [x]  [US3] Create `docker-compose.prod.yml` at project root — **this is the primary deliverable file for Phases 5, 6, 7, 8**. Structure:
   - Top-level `secrets:` block:
     ```yaml
     secrets:
@@ -127,7 +127,7 @@ Validation is done via `docker compose config`, `make typecheck`, `make pre-comm
 
 **Independent Test**: `docker compose up` → `docker compose logs worker` shows Celery worker online → `uv run celery -A backend.worker inspect active` shows worker connected.
 
-- [ ] T012 [US4] Verify/confirm in `docker-compose.yml` (from T009) that the `worker` service has the correct volume mounts identical to `backend`: `./backend/models:/app/backend/models:ro`, `chroma_data:/app/chroma_db`, `mlruns_data:/app/mlruns`, `./output:/app/output`, `./logs:/app/logs`
+- [x]  [US4] Verify/confirm in `docker-compose.yml` (from T009) that the `worker` service has the correct volume mounts identical to `backend`: `./backend/models:/app/backend/models:ro`, `chroma_data:/app/chroma_db`, `mlruns_data:/app/mlruns`, `./output:/app/output`, `./logs:/app/logs`
   - If any volume is missing from T009's worker definition, add it now
   - Confirm `MLFLOW_TRACKING_URI` is set in worker environment
 
@@ -139,7 +139,7 @@ Validation is done via `docker compose config`, `make typecheck`, `make pre-comm
 
 **Independent Test**: Start prod stack → restart MLflow container → previously logged runs still visible in MLflow UI at port 5000 (accessed via caddy on `/mlflow` or directly).
 
-- [ ] T013 [US5] Add (or update) the `mlflow` service override in `docker-compose.prod.yml`:
+- [x]  [US5] Add (or update) the `mlflow` service override in `docker-compose.prod.yml`:
   ```yaml
   mlflow:
     command: >
@@ -154,7 +154,7 @@ Validation is done via `docker compose config`, `make typecheck`, `make pre-comm
   ```
   Add inline comment `# GCS alternative: --default-artifact-root gs://your-bucket/artifacts` and `# GCP: set GOOGLE_APPLICATION_CREDENTIALS in environment instead of AWS vars`
 
-- [ ] T014 [P] [US5] Document the `mlflow` database prerequisite: add a comment block to `docker-compose.prod.yml` (above the `mlflow` service) noting that ops must run `CREATE DATABASE mlflow;` in PostgreSQL before the first production startup, or add a one-time init step. Also add to `quickstart.md` under "Production Deployment Workflow" a step: `docker compose exec postgres psql -U ${POSTGRES_USER} -c "CREATE DATABASE mlflow;"`
+- [x]  [P] [US5] Document the `mlflow` database prerequisite: add a comment block to `docker-compose.prod.yml` (above the `mlflow` service) noting that ops must run `CREATE DATABASE mlflow;` in PostgreSQL before the first production startup, or add a one-time init step. Also add to `quickstart.md` under "Production Deployment Workflow" a step: `docker compose exec postgres psql -U ${POSTGRES_USER} -c "CREATE DATABASE mlflow;"`
 
 ---
 
@@ -164,7 +164,7 @@ Validation is done via `docker compose config`, `make typecheck`, `make pre-comm
 
 **Independent Test**: Stop MLflow container → submit a prediction request → observe `WARNING: MLflow registry unavailable` in backend logs → prediction still succeeds (loaded from `.pkl`).
 
-- [ ] T015 [US6] Refactor `load_prediction_models(model_name: str)` in `backend/core/infer_utils.py`:
+- [x]  [US6] Refactor `load_prediction_models(model_name: str)` in `backend/core/infer_utils.py`:
   - Build a `pkl_path_map` dict mapping model name → config pkl path
   - Raise `ValueError` immediately for unknown model name (before any loading attempt)
   - Try `mlflow.sklearn.load_model(f"models:/lersha-{model_name}/Production")` in a `try` block
@@ -176,7 +176,7 @@ Validation is done via `docker compose config`, `make typecheck`, `make pre-comm
   - Ensure `import mlflow.sklearn` is added at the top of the file (alongside existing `import mlflow`)
   - Full function must have complete PEP 257 docstring and `-> object` return type annotation
 
-- [ ] T016 [P] [US6] Create `backend/scripts/register_model.py` — documentation-only script:
+- [x]  [P] [US6] Create `backend/scripts/register_model.py` — documentation-only script:
   - Module-level docstring only; no executable `if __name__ == "__main__"` block
   - Document the training-time registration pattern as a Python comment block:
     ```python
@@ -204,7 +204,7 @@ Validation is done via `docker compose config`, `make typecheck`, `make pre-comm
 
 **Independent Test**: `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d backup` → `docker compose logs backup` shows scheduler active → within the first minute a backup file appears (use `SCHEDULE=@every 1m` for testing, revert to `@daily`).
 
-- [ ] T017 [US7] Add the `backup` service to `docker-compose.prod.yml`:
+- [x]  [US7] Add the `backup` service to `docker-compose.prod.yml`:
   ```yaml
   backup:
     image: prodrigestivill/postgres-backup-local
@@ -224,7 +224,7 @@ Validation is done via `docker compose config`, `make typecheck`, `make pre-comm
       - ./backups:/backups
   ```
 
-- [ ] T018 [US7] Add `restore-db` target to `Makefile`:
+- [x]  [US7] Add `restore-db` target to `Makefile`:
   - Update `.PHONY` line at the top to include `restore-db`
   - Add the target body:
     ```makefile
@@ -257,7 +257,7 @@ Validation is done via `docker compose config`, `make typecheck`, `make pre-comm
 
 **Independent Test**: `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d caddy` starts without error. `docker compose logs caddy` shows Caddy starting and attempting ACME challenge.
 
-- [ ] T019 [US1] Add the `caddy` service to `docker-compose.prod.yml`:
+- [x]  [US1] Add the `caddy` service to `docker-compose.prod.yml`:
   ```yaml
   caddy:
     image: caddy:2-alpine
@@ -283,7 +283,7 @@ Validation is done via `docker compose config`, `make typecheck`, `make pre-comm
 
 **Independent Test**: Trigger a manual workflow run from GitHub Actions UI on any branch → all three jobs (lint, test, build) run to completion. Build job includes "Validate compose files" step.
 
-- [ ] T020 [P] [US8] Add `workflow_dispatch:` trigger to `.github/workflows/ci.yml` — add it as a third trigger alongside `push` and `pull_request`:
+- [x]  [P] [US8] Add `workflow_dispatch:` trigger to `.github/workflows/ci.yml` — add it as a third trigger alongside `push` and `pull_request`:
   ```yaml
   on:
     push:
@@ -293,7 +293,7 @@ Validation is done via `docker compose config`, `make typecheck`, `make pre-comm
     workflow_dispatch:
   ```
 
-- [ ] T021 [P] [US8] Add compose file validation step to the `build` job in `.github/workflows/ci.yml` — insert **before** the `Build backend image` step:
+- [x]  [P] [US8] Add compose file validation step to the `build` job in `.github/workflows/ci.yml` — insert **before** the `Build backend image` step:
   ```yaml
   - name: Validate compose files (base + prod)
     env:
@@ -318,17 +318,17 @@ Validation is done via `docker compose config`, `make typecheck`, `make pre-comm
 
 **Purpose**: End-to-end validation, documentation consistency, and format enforcement.
 
-- [ ] T022 [P] Run `make pre-commit` and fix any ruff or formatting violations introduced by changes to `backend/config/config.py` and `backend/core/infer_utils.py` [P2-PEP]
-- [ ] T023 [P] Run `make typecheck` (`uv run mypy backend/`) — fix any type errors from `_read_secret` return type (`str | None`) propagation and `load_prediction_models` return annotation [P2-PEP]
-- [ ] T024 [P] Run `docker compose config > /dev/null` (base + override) locally to confirm dev stack is valid
-- [ ] T025 [P] Run `docker compose -f docker-compose.yml -f docker-compose.prod.yml config > /dev/null` locally to confirm prod stack is valid (set dummy env vars in shell first)
-- [ ] T026 Perform end-to-end smoke test per `quickstart.md`:
+- [x]  [P] Run `make pre-commit` and fix any ruff or formatting violations introduced by changes to `backend/config/config.py` and `backend/core/infer_utils.py` [P2-PEP]
+- [x]  [P] Run `make typecheck` (`uv run mypy backend/`) — fix any type errors from `_read_secret` return type (`str | None`) propagation and `load_prediction_models` return annotation [P2-PEP]
+- [x]  [P] Run `docker compose config > /dev/null` (base + override) locally to confirm dev stack is valid
+- [x]  [P] Run `docker compose -f docker-compose.yml -f docker-compose.prod.yml config > /dev/null` locally to confirm prod stack is valid (set dummy env vars in shell first)
+- [x]  Perform end-to-end smoke test per `quickstart.md`:
   1. `docker compose up` — confirm all base services start, worker appears online
   2. `curl http://localhost:8000/health` → `{"db":"ok","chroma":"ok"}`
   3. `uv run celery -A backend.worker inspect active` → worker connected
   4. `uv run alembic current` → shows head revision
   5. Confirm `docker compose logs backup` shows scheduler message (prod stack)
-- [ ] T027 [P] Update `specs/005-infra-prod-hardening/checklists/requirements.md` — mark all checklist items verified after smoke test passes
+- [x]  [P] Update `specs/005-infra-prod-hardening/checklists/requirements.md` — mark all checklist items verified after smoke test passes
 
 ---
 

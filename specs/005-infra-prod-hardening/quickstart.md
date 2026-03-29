@@ -49,17 +49,23 @@ echo -n "your-real-gemini-key" > secrets/gemini_api_key
 # 3. Configure your domain in Caddyfile
 # Edit Caddyfile: replace "your-domain.com" with your real domain
 
-# 4. Start production stack
+# 4. Create the MLflow tracking database (ONE-TIME, before first startup)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm postgres \
+  psql -h postgres -U "${POSTGRES_USER:-lersha}" -c "CREATE DATABASE mlflow;"
+# Or if postgres is already running:
+# docker compose exec postgres psql -U "${POSTGRES_USER:-lersha}" -c "CREATE DATABASE mlflow;"
+
+# 5. Start production stack
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
-# 5. Verify health
+# 6. Verify health
 curl https://your-domain.com/health
 # Expected: {"db":"ok","chroma":"ok"}
 
-# 6. Verify worker
+# 7. Verify worker
 uv run celery -A backend.worker inspect active
 
-# 7. Check migrations
+# 8. Check migrations
 uv run alembic current    # → should show head revision
 ```
 
