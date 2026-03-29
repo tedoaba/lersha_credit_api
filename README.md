@@ -163,18 +163,25 @@ explanation engine has retrieval context. Run once after first setup.
 
 ### 5 — Start the services
 
-Open two terminals:
-
 ```bash
-# Terminal 1 — FastAPI backend (hot reload)
-make api
-# → http://localhost:8000
-# → http://localhost:8000/docs  (Swagger UI)
-
-# Terminal 2 — Streamlit UI
-make ui
-# → http://localhost:8501
+make dev
 ```
+
+This opens the **API in a new terminal window** and starts the **UI in the current terminal** — both run concurrently with a single command.
+
+| Service | URL |
+|---|---|
+| FastAPI backend | http://localhost:8000 |
+| Swagger / OpenAPI docs | http://localhost:8000/docs |
+| Streamlit UI | http://localhost:8501 |
+
+To stop: press `Ctrl-C` in the current terminal (stops the UI), then close the API window.
+
+> You can also start them individually:
+> ```bash
+> make api   # backend only — port 8000
+> make ui    # UI only — port 8501
+> ```
 
 ---
 
@@ -303,6 +310,7 @@ make db-stamp       # Stamp DB at current head (use after manual schema creation
 make setup-chroma   # Populate ChromaDB credit_features collection
 
 # ── Development ────────────────────────────────────────────────
+make dev            # Start API (new window) + UI (current terminal)
 make api            # Start FastAPI backend on :8000 (hot reload)
 make ui             # Start Streamlit UI on :8501
 make mlflow         # Start MLflow UI on :5000

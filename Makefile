@@ -1,7 +1,7 @@
 # Lersha Credit Scoring System — Makefile
 # Usage: make <target>
 
-.PHONY: help install setup-db migrate db-stamp setup-chroma lint format check-format ci-quality typecheck pre-commit test coverage api ui mlflow docker-build docker-up docker-down restore-db clean
+.PHONY: help install setup-db migrate db-stamp setup-chroma lint format check-format ci-quality typecheck pre-commit test coverage dev api ui mlflow docker-build docker-up docker-down restore-db clean
 
 # Default target
 help:
@@ -17,6 +17,7 @@ help:
 	@echo "  make setup-chroma  Populate ChromaDB credit_features collection"
 	@echo ""
 	@echo "Development:"
+	@echo "  make dev           Start API (new window) + UI (current terminal)"
 	@echo "  make api           Start the FastAPI backend on port 8000 (hot reload)"
 	@echo "  make ui            Start the Streamlit UI on port 8501"
 	@echo "  make mlflow        Start the MLflow tracking server on port 5000"
@@ -57,6 +58,13 @@ setup-chroma:
 	uv run python backend/scripts/populate_chroma.py
 
 # ── Development ────────────────────────────────────────────────────────────────
+
+# Starts the API in a new terminal window and the UI in the current terminal.
+# Both processes run concurrently; Ctrl-C in the current terminal stops the UI.
+# Close the API window separately to stop the backend.
+dev:
+	start "Lersha-API" cmd /k "uv run uvicorn backend.main:app --reload --port 8000 --host 0.0.0.0"
+	uv run streamlit run ui/Introduction.py --server.port 8501 --server.address 0.0.0.0
 
 api:
 	uv run uvicorn backend.main:app --reload --port 8000 --host 0.0.0.0 --reload
