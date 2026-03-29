@@ -1,7 +1,7 @@
 # Lersha Credit Scoring System — Makefile
 # Usage: make <target>
 
-.PHONY: help install setup-db setup-chroma lint format check-format ci-quality typecheck pre-commit test coverage api ui mlflow docker-build docker-up docker-down clean
+.PHONY: help install setup-db setup-chroma lint format check-format ci-quality typecheck pre-commit test coverage api ui mlflow docker-build docker-up docker-down restore-db clean
 
 # Default target
 help:
@@ -31,8 +31,9 @@ help:
 	@echo ""
 	@echo "Docker:"
 	@echo "  make docker-build  Build backend and ui Docker images"
-	@echo "  make docker-up     Start the full Docker Compose stack"
+	@echo "  make docker-up     Start the full Docker Compose stack (dev)"
 	@echo "  make docker-down   Stop the Docker Compose stack"
+	@echo "  make restore-db    Restore PostgreSQL from backup (BACKUP_FILE=path required)"
 	@echo ""
 	@echo "  make clean         Remove __pycache__, .coverage, htmlcov/"
 
@@ -87,6 +88,7 @@ coverage:
 # ── Docker ─────────────────────────────────────────────────────────────────────
 
 docker-build:
+	@echo "NOTE: For production, use:  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d"
 	docker build -f backend/Dockerfile -t lersha-backend:latest .
 	docker build -f ui/Dockerfile -t lersha-ui:latest .
 
@@ -95,6 +97,15 @@ docker-up:
 
 docker-down:
 	docker compose down
+
+restore-db:
+	@if [ -z "$(BACKUP_FILE)" ]; then \
+		echo "Usage: make restore-db BACKUP_FILE=./backups/<date>.sql.gz"; \
+		exit 1; \
+	fi
+	@echo "Restoring database from $(BACKUP_FILE) ..."
+	gunzip -c "$(BACKUP_FILE)" | psql "$(DB_URI)"
+	@echo "Restore complete."
 
 # ── Cleanup ────────────────────────────────────────────────────────────────────
 
