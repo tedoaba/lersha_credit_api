@@ -1,19 +1,66 @@
+"""Dashboard page — display historical credit scoring results via the backend API.
+
+All backend communication is handled exclusively through LershaAPIClient.
+No imports from backend.*, config.*, utils.eda, or src.* are permitted in this file.
+"""
+from __future__ import annotations
+
 import io
 import re
 
+import pandas as pd
+import requests
 import streamlit as st
 
-from config.config import config
-from utils.eda import load_table, style_decision
+from ui.utils.api_client import LershaAPIClient
 
 st.set_page_config(
     page_title="Dashboard",
     layout="wide",
 )
 
+client = LershaAPIClient()
 
-df = load_table(config.candidate_result)
 
+# ── Inline helper (previously imported from utils.eda) ──────────────────────
+
+def style_decision(val: str) -> str:
+    """Return a CSS background-color style string based on the decision value.
+
+    Args:
+        val: The decision class name (e.g. ``"Eligible"``, ``"Review"``, ``"Not Eligible"``).
+
+    Returns:
+        str: CSS ``background-color`` property string for use with ``DataFrame.style.map``.
+    """
+    colors: dict[str, str] = {
+        "Eligible": "background-color: #d4edda",
+        "Review": "background-color: #fff3cd",
+        "Not Eligible": "background-color: #f8d7da",
+    }
+    return colors.get(val, "")
+
+
+# ── Data Loading ────────────────────────────────────────────────────────────
+
+try:
+    response = client.get_results(limit=500)
+    df = pd.DataFrame(response.get("records", []))
+except requests.exceptions.ConnectionError:
+    st.error(
+        "🔌 Backend unavailable. Is the API server running? "
+        "Start it with `make api` or `uvicorn backend.main:app --reload --port 8000`."
+    )
+    st.stop()
+except requests.exceptions.HTTPError as exc:
+    if exc.response is not None and exc.response.status_code == 403:
+        st.error("🔐 Authentication failed. Check that API_KEY matches the backend configuration.")
+    else:
+        st.error(f"⚠ API error: {exc}")
+    st.stop()
+
+
+# ── Page Layout ─────────────────────────────────────────────────────────────
 
 st.markdown("## 📊 **Farmer Credit Worthiness Dashboard**")
 
@@ -21,7 +68,7 @@ if df.empty:
     st.info("No data available.")
     st.stop()
 
-df = df.drop(columns=['id', 'top_feature_contributions', 'timestamp'], errors="ignore")
+df = df.drop(columns=["id", "top_feature_contributions", "timestamp"], errors="ignore")
 
 df = df.rename(columns={
     "farmer_uid": "Farmer ID",
@@ -29,7 +76,7 @@ df = df.rename(columns={
     "gender": "Gender",
     "predicted_class_name": "Decision",
     "rag_explanation": "RAG Explanation",
-    "model_name": "Model Name"
+    "model_name": "Model Name",
 })
 
 cols = [c for c in df.columns if c != "Decision"] + ["Decision"]
@@ -81,10 +128,20 @@ end = start + rows_per_page
 
 ILLEGAL_CHARACTERS_RE = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
 
-def clean_illegal_chars(val):
+
+def clean_illegal_chars(val: object) -> object:
+    """Remove control characters that are illegal in Excel/CSV exports.
+
+    Args:
+        val: Any cell value; non-strings are returned unchanged.
+
+    Returns:
+        Cleaned string, or the original value if not a string.
+    """
     if isinstance(val, str):
         return ILLEGAL_CHARACTERS_RE.sub("", val)
     return val
+
 
 page_df = filtered_df.iloc[start:end]
 csv_bytes = page_df.to_csv(index=False).encode("utf-8")
@@ -128,6 +185,8 @@ with colB:
 
 st.caption(f"Showing {len(page_df)} of {total_rows} records. Page {page}/{total_pages}.")
 
+
+# ── Footer ──────────────────────────────────────────────────────────────────
 
 footer = """
 <style>
