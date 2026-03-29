@@ -5,6 +5,10 @@ Import pattern: from backend.config.config import config
 
 BASE_DIR resolves to the repository root (parents[2] from this file at
 backend/config/config.py → parents[0]=backend/config, [1]=backend, [2]=root).
+
+Secret reading priority (per [P9-SEC] and [P5-CONFIG]):
+  1. Docker secrets file at /run/secrets/{name}  (production)
+  2. Environment variable fallback               (development / CI)
 """
 
 import os
@@ -17,6 +21,25 @@ load_dotenv()
 
 # Repository root — two levels up from backend/config/config.py
 BASE_DIR = Path(__file__).resolve().parents[2]
+
+
+def _read_secret(name: str, env_var: str) -> str | None:
+    """Read a secret from a Docker secrets file, falling back to an environment variable.
+
+    In production the secret is mounted at /run/secrets/{name} by Docker Compose.
+    In development the environment variable set in .env is used instead.
+
+    Args:
+        name: Docker secret name, maps to the file path /run/secrets/{name}.
+        env_var: Name of the fallback environment variable.
+
+    Returns:
+        The secret value (whitespace-stripped), or None if neither source is set.
+    """
+    secret_path = Path(f"/run/secrets/{name}")
+    if secret_path.exists():
+        return secret_path.read_text(encoding="utf-8").strip()
+    return os.getenv(env_var)
 
 
 class Config:
@@ -114,7 +137,6 @@ class Config:
         # ── LLM / Embeddings ───────────────────────────────────────────────
         self.prompt_path = os.getenv("PROMPT_PATH", str(BASE_DIR / "backend" / "prompts" / "prompts.yaml"))
         self.gemini_model_id = os.getenv("GEMINI_MODEL")
-        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
         self.embedder_model = os.getenv("EMBEDDER_MODEL", "all-MiniLM-L6-v2")
 
         # ── Output / SHAP ──────────────────────────────────────────────────
@@ -132,16 +154,19 @@ class Config:
         # ── Redis / Celery ─────────────────────────────────────────────────────
         self.redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
 
-        # ── API security ───────────────────────────────────────────────────────
-        self.api_key = os.getenv("API_KEY")
+        # ── API security ───────────────────────────────────────────────────────────
+        # Reads from /run/secrets/api_key (Docker prod) or API_KEY env var (dev/CI)
+        self.api_key = _read_secret("api_key", "API_KEY")
         if not self.api_key:
-            raise ValueError("API_KEY environment variable not set")
+            raise ValueError("API_KEY environment variable (or Docker secret 'api_key') not set")
 
         # ── Required LLM keys ──────────────────────────────────────────────
+        # Reads from /run/secrets/gemini_api_key (Docker prod) or GEMINI_API_KEY env var
+        self.gemini_api_key = _read_secret("gemini_api_key", "GEMINI_API_KEY")
         if not self.gemini_model_id:
             raise ValueError("GEMINI_MODEL environment variable not set")
         if not self.gemini_api_key:
-            raise ValueError("GEMINI_API_KEY environment variable not set")
+            raise ValueError("GEMINI_API_KEY environment variable (or Docker secret 'gemini_api_key') not set")
 
         # ── Hyperparameters from YAML ──────────────────────────────────────
         _hparams_path = BASE_DIR / "backend" / "config" / "hyperparams.yaml"
