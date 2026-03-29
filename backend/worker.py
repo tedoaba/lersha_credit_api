@@ -22,11 +22,16 @@ Required environment variables:
 
 from __future__ import annotations
 
-from celery import Celery
+import os
 
-from backend.config.config import config
-from backend.logger.logger import get_logger
-from backend.services import db_utils
+from celery import Celery
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from backend.config.config import config  # noqa: E402
+from backend.logger.logger import get_logger  # noqa: E402
+from backend.services import db_utils  # noqa: E402
 
 logger = get_logger(__name__)
 
@@ -37,6 +42,9 @@ celery_app = Celery(
     broker=config.redis_url,
     backend=config.redis_url,
 )
+
+# CELERY_TASK_ALWAYS_EAGER is checked in the predict router, not here.
+# Celery always runs in normal (non-eager) mode so it can be used with Redis in prod.
 
 celery_app.conf.update(
     task_serializer="json",
