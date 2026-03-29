@@ -1,0 +1,46 @@
+# docker-compose.override.yml — DEVELOPMENT OVERRIDES
+#
+# Auto-loaded by `docker compose up` (no -f flag needed).
+# Provides:
+#   - Hot reload for backend and UI via bind mounts
+#   - Host port bindings for local browser access
+#   - SQLite MLflow backend (lightweight for dev)
+#
+# Do NOT use this file in production.
+
+services:
+  # ── PostgreSQL (expose port for local DB tools) ────────────────────────────
+  postgres:
+    ports:
+      - "5432:5432"
+
+  # ── Redis (expose port for local inspection) ───────────────────────────────
+  redis:
+    ports:
+      - "6379:6379"
+
+  # ── FastAPI Backend (hot reload + bind mounts) ─────────────────────────────
+  backend:
+    command: uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      # Bind mounts enable hot reload — code changes are reflected instantly
+      - ./backend:/app/backend
+      - ./ui:/app/ui
+
+  # ── Streamlit UI ───────────────────────────────────────────────────────────
+  ui:
+    ports:
+      - "8501:8501"
+
+  # ── MLflow (SQLite backend, lightweight for dev) ───────────────────────────
+  mlflow:
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri sqlite:///mlruns/mlflow.db
+      --default-artifact-root /mlruns
+    ports:
+      - "5000:5000"
