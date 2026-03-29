@@ -6,6 +6,7 @@ that will be used by the RAG explanation pipeline.
 Usage:
     uv run python backend/scripts/populate_chroma.py
 """
+
 import chromadb
 from chromadb.utils import embedding_functions
 
@@ -34,7 +35,10 @@ FEATURE_DEFINITIONS = [
     ("flaw", "Presence of observed land/crop defects or quality issues (1=yes, 0=no)."),
     ("farm_mechanization", "Level of mechanization: manual, semi-mechanized, fully mechanized."),
     ("agriculture_experience", "Log-transformed years of agricultural experience (log1p of raw value)."),
-    ("institutional_support_score", "Sum of 4 binary institutional flags: microfinance, cooperative, agri-cert, health-insurance."),
+    (
+        "institutional_support_score",
+        "Sum of 4 binary institutional flags: microfinance, cooperative, agri-cert, health-insurance.",
+    ),
     ("farmsizehectares", "Total operated farm area in hectares."),
     ("seedtype", "Seed type used: improved, traditional, hybrid."),
     ("seedquintals", "Quantity of seed used in quintals (100 kg per quintal)."),

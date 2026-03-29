@@ -4,6 +4,7 @@ Handles data fetching, model loading, SHAP computation, and result assembly.
 RAG explanation is live — the commented-out import and placeholder string
 have been replaced with real ``get_rag_explanation`` calls.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -105,13 +106,15 @@ def run_inferences(
             shap_values = None
             if model_name != "catboost":
                 preprocess_steps = [
-                    (name, step)
-                    for name, step in model.named_steps.items()
-                    if name in ("inf_cleaner", "imputer")
+                    (name, step) for name, step in model.named_steps.items() if name in ("inf_cleaner", "imputer")
                 ]
                 preprocess_pipeline = SkPipeline(preprocess_steps)
                 X_shap = preprocess_pipeline.transform(row)
-                feature_names = row.columns.tolist() if hasattr(row, "columns") else [f"feature_{i}" for i in range(X_shap.shape[1])]
+                feature_names = (
+                    row.columns.tolist()
+                    if hasattr(row, "columns")
+                    else [f"feature_{i}" for i in range(X_shap.shape[1])]
+                )
                 _, shap_values = generate_shap_value_summary_plots(
                     model.named_steps["model"], row, feature_names, model_name
                 )
@@ -128,12 +131,14 @@ def run_inferences(
                 logger.warning("RAG explanation failed for record %d: %s", idx, rag_exc)
                 rag_explanation = "[RAG unavailable]"
 
-            evaluation_results.append({
-                "predicted_class_name": str(prediction_class_name),
-                "top_feature_contributions": top10_list,
-                "rag_explanation": rag_explanation,
-                "model_name": model_name,
-            })
+            evaluation_results.append(
+                {
+                    "predicted_class_name": str(prediction_class_name),
+                    "top_feature_contributions": top10_list,
+                    "rag_explanation": rag_explanation,
+                    "model_name": model_name,
+                }
+            )
 
         save_batch_evaluations(original_data, evaluation_results)
         logger.info("Inference complete — model: %s, records: %d", model_name, len(selected_data))

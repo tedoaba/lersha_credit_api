@@ -3,6 +3,7 @@
 All backend communication is handled exclusively through LershaAPIClient.
 No imports from backend.*, config.*, utils.eda, or src.* are permitted in this file.
 """
+
 from __future__ import annotations
 
 import io
@@ -23,6 +24,7 @@ client = LershaAPIClient()
 
 
 # ── Inline helper (previously imported from utils.eda) ──────────────────────
+
 
 def style_decision(val: str) -> str:
     """Return a CSS background-color style string based on the decision value.
@@ -70,14 +72,16 @@ if df.empty:
 
 df = df.drop(columns=["id", "top_feature_contributions", "timestamp"], errors="ignore")
 
-df = df.rename(columns={
-    "farmer_uid": "Farmer ID",
-    "age": "Age",
-    "gender": "Gender",
-    "predicted_class_name": "Decision",
-    "rag_explanation": "RAG Explanation",
-    "model_name": "Model Name",
-})
+df = df.rename(
+    columns={
+        "farmer_uid": "Farmer ID",
+        "age": "Age",
+        "gender": "Gender",
+        "predicted_class_name": "Decision",
+        "rag_explanation": "RAG Explanation",
+        "model_name": "Model Name",
+    }
+)
 
 cols = [c for c in df.columns if c != "Decision"] + ["Decision"]
 df = df[cols]
@@ -154,12 +158,8 @@ excel_bytes = excel_buffer.getvalue()
 st.markdown("---")
 st.subheader("Farmers List")
 
-styled_df = (
-    page_df.style
-        .map(style_decision, subset=["Decision"])
-        .set_properties(
-            **{"border": "1px solid rgba(150,150,150,0.2)", "border-radius": "4px", "width": "100%"}
-        )
+styled_df = page_df.style.map(style_decision, subset=["Decision"]).set_properties(
+    **{"border": "1px solid rgba(150,150,150,0.2)", "border-radius": "4px", "width": "100%"}
 )
 
 

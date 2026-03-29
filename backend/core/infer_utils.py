@@ -9,6 +9,7 @@ Dead code removed in monorepo refactor (2026-03-29):
   - generate_shap_value_summary_plotsss (triple-s, duplicate of the clean version below)
   - load_prediction_model() (singular — referenced removed _34_ model config attributes)
 """
+
 import contextlib
 import json
 from datetime import datetime
@@ -280,11 +281,13 @@ def build_contribution_table(sample_data: pd.DataFrame, shap_values, pred_class_
         )
 
     return (
-        pd.DataFrame({
-            "Feature": feature_names,
-            "SHAP Value": class_shap_values,
-            "Feature Value": feature_values,
-        })
+        pd.DataFrame(
+            {
+                "Feature": feature_names,
+                "SHAP Value": class_shap_values,
+                "Feature Value": feature_values,
+            }
+        )
         .sort_values(by="SHAP Value", key=lambda x: x.abs(), ascending=False)
         .reset_index(drop=True)
     )
@@ -315,7 +318,9 @@ def generate_shap_value_summary_plots(model, X_shap, feature_names: list, model_
     elif isinstance(shap_values, np.ndarray) and shap_values.ndim == 2:
         shap_per_class = [shap_values]
     else:
-        raise ValueError(f"Unsupported SHAP output: type={type(shap_values)}, shape={getattr(shap_values, 'shape', None)}")
+        raise ValueError(
+            f"Unsupported SHAP output: type={type(shap_values)}, shape={getattr(shap_values, 'shape', None)}"
+        )
 
     for class_idx, class_shap in enumerate(shap_per_class):
         shap_values_dict = [

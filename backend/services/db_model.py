@@ -1,4 +1,5 @@
 """SQLAlchemy ORM models for the Lersha Credit Scoring backend."""
+
 from sqlalchemy import JSON, TIMESTAMP, Column, Integer, String, Text
 from sqlalchemy.orm import declarative_base
 

@@ -4,6 +4,7 @@ All API request and response models are defined here. Field names use
 ``result_xgboost`` and ``result_random_forest`` exclusively — the legacy
 fields ``result_18``, ``result_44``, and ``result_featured`` must never appear.
 """
+
 from __future__ import annotations
 
 from datetime import datetime

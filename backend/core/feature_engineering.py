@@ -8,6 +8,7 @@ Usage:
     from backend.core.feature_engineering import apply_feature_engineering
     engineered_df = apply_feature_engineering(raw_farmer_df)
 """
+
 import numpy as np
 import pandas as pd
 
@@ -58,8 +59,7 @@ def apply_feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
     df["yield_per_hectare"] = np.round(df["expectedyieldquintals"] / df["farmsizehectares"], 3)
 
     df["input_intensity"] = np.round(
-        (df["seedquintals"] + df["ureafertilizerquintals"] + df["dapnpsfertilizerquintals"])
-        / df["farmsizehectares"],
+        (df["seedquintals"] + df["ureafertilizerquintals"] + df["dapnpsfertilizerquintals"]) / df["farmsizehectares"],
         3,
     )
 
@@ -82,13 +82,23 @@ def apply_feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
 
     # ── Drop source columns consumed by the derived features ─────────────
     columns_to_drop = [
-        "age", "value_chain", "estimated_cost", "estimated_income",
-        "estimated_expenses", "estimated_income_another_farm",
-        "total_farmland_size", "land_size", "childrenunder12",
-        "elderlymembersover60", "agricultureexperience",
-        "agriculturalcertificate", "hasmemberofmicrofinance",
-        "hascooperativeassociation", "hascommunityhealthinsurance",
-        "maincrops", "lastyearaverageprice",
+        "age",
+        "value_chain",
+        "estimated_cost",
+        "estimated_income",
+        "estimated_expenses",
+        "estimated_income_another_farm",
+        "total_farmland_size",
+        "land_size",
+        "childrenunder12",
+        "elderlymembersover60",
+        "agricultureexperience",
+        "agriculturalcertificate",
+        "hasmemberofmicrofinance",
+        "hascooperativeassociation",
+        "hascommunityhealthinsurance",
+        "maincrops",
+        "lastyearaverageprice",
     ]
     df = df.drop(columns=columns_to_drop, errors="ignore")
 

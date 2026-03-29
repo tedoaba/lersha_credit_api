@@ -1,4 +1,3 @@
-
 import streamlit as st
 
 st.set_page_config(
@@ -8,7 +7,8 @@ st.set_page_config(
 
 st.title("🌱 Lersha Credit Scoring System")
 
-st.markdown("""
+st.markdown(
+    """
 <style>
 /* Light Mode */
 @media (prefers-color-scheme: light) {
@@ -45,13 +45,16 @@ st.markdown("""
     margin-top: 0 !important;
 }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 
 col1, col2 = st.columns([1.1, 1.1])
 
 with col1:
-    st.markdown("""
+    st.markdown(
+        """
     <div class="card">
         <h3>📊 Interactive Data Visualizations</h3>
         <p>Understand customer profiles and risk indicators through dynamic charts and visual summaries designed to reveal insights at a glance.</p>
@@ -65,11 +68,14 @@ with col1:
             <li>Export results for reporting and decision-making</li>
         </ul>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 with col2:
-    st.markdown("""
+    st.markdown(
+        """
     <div class="card">
         <h3>🤖 Real-Time Credit Predictions</h3>
         <p>Upload customer data (CSV) or retrieve records from the database to generate instant, ML-powered credit scores using Lersha’s model.</p>
@@ -79,14 +85,19 @@ with col2:
         <h3>🗄️ Fully Integrated Database</h3>
         <p>All predictions, customer details, and model outputs are securely stored in a production-ready database which ensures accuracy and collaboration for analysts and field agents.</p>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
-st.markdown("""
+st.markdown(
+    """
     <div class="card">
         <h3>🧪 Purpose</h3>
         <p>Built to accelerate credit evaluations, strengthen risk assessment, and support sustainable agricultural financing in Ethiopia.</p>
     </div>
-        """, unsafe_allow_html=True)
+        """,
+    unsafe_allow_html=True,
+)
 
 
 st.info("This platform uses a replica of Lersha's expert scorecard model in machine learning.")

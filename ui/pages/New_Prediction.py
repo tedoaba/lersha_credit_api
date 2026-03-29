@@ -3,6 +3,7 @@
 All backend communication is handled exclusively through LershaAPIClient.
 No imports from backend.*, config.*, or src.* are permitted in this file.
 """
+
 import pandas as pd
 import requests
 import streamlit as st
