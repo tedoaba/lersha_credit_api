@@ -89,6 +89,48 @@ def test_age_group_fallback_single_row(raw_farmer_row):
     assert result["age_group"].iloc[0] in ["Young", "Early_Middle", "Late_Middle", "Senior"]
 
 
+def test_age_group_binning_two_row_edge_case():
+    """age_group binning must complete without error on a 2-row DataFrame.
+
+    With only 2 distinct age values ``pd.qcut`` (4 quantiles) raises a
+    ValueError; the implementation must fall back to ``pd.cut`` with fixed
+    bins and return a valid categorical column with no NaN values.
+    """
+    df = pd.DataFrame({
+        "farmer_uid": ["F-001", "F-002"],
+        "gender": ["Male", "Female"],
+        "age": [25, 55],  # two distinct ages — triggers qcut ValueError
+        "family_size": [4, 6],
+        "estimated_income": [10000.0, 14000.0],
+        "estimated_income_another_farm": [1000.0, 2000.0],
+        "estimated_expenses": [3000.0, 5000.0],
+        "estimated_cost": [1500.0, 2500.0],
+        "agricultureexperience": [5, 18],
+        "hasmemberofmicrofinance": [1, 0],
+        "hascooperativeassociation": [0, 1],
+        "agriculturalcertificate": [1, 1],
+        "hascommunityhealthinsurance": [1, 0],
+        "farmsizehectares": [2.0, 3.5],
+        "expectedyieldquintals": [24.0, 42.0],
+        "seedquintals": [2.5, 4.5],
+        "ureafertilizerquintals": [1.0, 2.0],
+        "dapnpsfertilizerquintals": [0.8, 1.5],
+        "value_chain": ["maize", "wheat"],
+        "total_farmland_size": [2.5, 4.0],
+        "land_size": [2.0, 3.5],
+        "childrenunder12": [1, 3],
+        "elderlymembersover60": [0, 1],
+        "maincrops": ["maize", "wheat"],
+        "lastyearaverageprice": [480.0, 610.0],
+        "decision": ["Eligible", "Review"],
+    })
+    result = apply_feature_engineering(df)
+    assert "age_group" in result.columns, "age_group column must be present"
+    assert result["age_group"].isna().sum() == 0, "age_group must not contain NaN"
+    valid_labels = {"Young", "Early_Middle", "Late_Middle", "Senior"}
+    assert set(result["age_group"].astype(str)) <= valid_labels
+
+
 def test_yield_per_hectare(raw_farmer_row):
     """yield_per_hectare = round(expectedyieldquintals / farmsizehectares, 3)."""
     result = apply_feature_engineering(raw_farmer_row)
