@@ -6,6 +6,7 @@ Import pattern: from backend.config.config import config
 BASE_DIR resolves to the repository root (parents[2] from this file at
 backend/config/config.py → parents[0]=backend/config, [1]=backend, [2]=root).
 """
+
 import os
 from pathlib import Path
 
@@ -34,17 +35,39 @@ class Config:
         self.id_column = os.getenv("ID_COLUMN", "farmer_uid")
 
         self.columns_36 = [
-            "gender", "age_group", "family_size", "typeofhouse",
-            "asset_ownership", "water_reserve_access", "output_storage_type",
-            "decision_making_role", "hasrusacco", "haslocaledir",
-            "primaryoccupation", "holdsleadershiprole", "land_title",
-            "rented_farm_land", "own_farmland_size", "family_farmland_size", "flaw",
-            "farm_mechanization", "agriculture_experience",
-            "institutional_support_score", "farmsizehectares", "seedtype",
-            "seedquintals", "expectedyieldquintals", "saleableyieldquintals",
-            "ureafertilizerquintals", "dapnpsfertilizerquintals", "input_intensity",
-            "yield_per_hectare", "income_per_family_member",
-            "total_estimated_income", "total_estimated_cost", "net_income",
+            "gender",
+            "age_group",
+            "family_size",
+            "typeofhouse",
+            "asset_ownership",
+            "water_reserve_access",
+            "output_storage_type",
+            "decision_making_role",
+            "hasrusacco",
+            "haslocaledir",
+            "primaryoccupation",
+            "holdsleadershiprole",
+            "land_title",
+            "rented_farm_land",
+            "own_farmland_size",
+            "family_farmland_size",
+            "flaw",
+            "farm_mechanization",
+            "agriculture_experience",
+            "institutional_support_score",
+            "farmsizehectares",
+            "seedtype",
+            "seedquintals",
+            "expectedyieldquintals",
+            "saleableyieldquintals",
+            "ureafertilizerquintals",
+            "dapnpsfertilizerquintals",
+            "input_intensity",
+            "yield_per_hectare",
+            "income_per_family_member",
+            "total_estimated_income",
+            "total_estimated_cost",
+            "net_income",
             "decision",
         ]
 
@@ -75,12 +98,8 @@ class Config:
         )
 
         # ── Data file paths ────────────────────────────────────────────────
-        self.testing_csv_path = os.getenv(
-            "CSV_PATH", str(BASE_DIR / "backend" / "data" / "testing_dataset_final.csv")
-        )
-        self.csv_general = os.getenv(
-            "CSV_GENERAL", str(BASE_DIR / "backend" / "data" / "merged_dataset_with_name.csv")
-        )
+        self.testing_csv_path = os.getenv("CSV_PATH", str(BASE_DIR / "backend" / "data" / "testing_dataset_final.csv"))
+        self.csv_general = os.getenv("CSV_GENERAL", str(BASE_DIR / "backend" / "data" / "merged_dataset_with_name.csv"))
 
         # ── Database ───────────────────────────────────────────────────────
         self.db_uri = os.getenv("DB_URI")
@@ -110,7 +129,10 @@ class Config:
         self.training_tag = os.getenv("TRAINING_TAG", "training")
         self.inference_tag = os.getenv("INFERENCE_TAG", "inference")
 
-        # ── API security ───────────────────────────────────────────────────
+        # ── Redis / Celery ─────────────────────────────────────────────────────
+        self.redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+
+        # ── API security ───────────────────────────────────────────────────────
         self.api_key = os.getenv("API_KEY")
         if not self.api_key:
             raise ValueError("API_KEY environment variable not set")

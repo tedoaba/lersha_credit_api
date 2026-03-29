@@ -2,19 +2,21 @@
 
 Response field names are ``result_xgboost`` and ``result_random_forest``.
 Legacy names (result_18, result_44, result_featured) must not appear.
+
+Rate limiting: 10 requests per minute per IP (enforced by slowapi).
+Async inference: jobs are dispatched to the Celery worker via Redis.
 """
-from __future__ import annotations
 
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 
-from backend.api.dependencies import require_api_key
+from backend.api.dependencies import limiter, require_api_key
 from backend.api.schemas import JobAcceptedResponse, JobStatusResponse, PredictRequest
-from backend.config.config import config
-from backend.core.pipeline import match_inputs, run_inferences
 from backend.logger.logger import get_logger
 from backend.services import db_utils
+from backend.worker import run_inference_task
 
 logger = get_logger(__name__)
 
@@ -22,25 +24,28 @@ router = APIRouter(dependencies=[Depends(require_api_key)])
 
 
 @router.post("/", status_code=status.HTTP_202_ACCEPTED, response_model=JobAcceptedResponse)
+@limiter.limit("10/minute")
 async def submit_prediction(
-    item: PredictRequest,
-    background_tasks: BackgroundTasks,
+    request: Request,
+    item: Annotated[PredictRequest, Body()],
 ) -> JobAcceptedResponse:
-    """Submit an inference job for asynchronous processing.
+    """Submit an inference job for asynchronous processing via Celery.
 
     Creates a job record in the ``inference_jobs`` table with status ``pending``
-    and adds the heavy ML pipeline as a background task.
+    and dispatches the inference task to the Celery worker queue.
+
+    Rate limited: 10 requests per minute per IP address.
 
     Args:
+        request: FastAPI request object (required by slowapi rate limiter).
         item: Validated prediction request (source, farmer_uid or number_of_rows).
-        background_tasks: FastAPI BackgroundTasks scheduler.
 
     Returns:
         JobAcceptedResponse: Job ID and ``"accepted"`` status.
     """
     job_id = str(uuid.uuid4())
     db_utils.create_job(job_id)
-    background_tasks.add_task(_run_prediction_background, job_id, item)
+    run_inference_task.delay(job_id, item.dict())
     logger.info("Inference job '%s' accepted (source=%s)", job_id, item.source)
     return JobAcceptedResponse(job_id=job_id)
 
@@ -68,47 +73,3 @@ async def get_prediction_status(job_id: str) -> JobStatusResponse:
         result=job.get("result"),
         error=job.get("error"),
     )
-
-
-# ── Background task ─────────────────────────────────────────────────────────
-
-async def _run_prediction_background(job_id: str, item: PredictRequest) -> None:
-    """Execute the full ML pipeline in the background.
-
-    Runs inference for both active models (xgboost, random_forest), assembles
-    the result under ``result_xgboost`` and ``result_random_forest`` keys,
-    and persists the outcome to the ``inference_jobs`` table.
-
-    On any exception the job is marked ``failed`` and the error message saved.
-
-    Args:
-        job_id: UUID of the inference job to update.
-        item: The original prediction request.
-    """
-    try:
-        db_utils.update_job_status(job_id, "processing")
-        original_data, selected_data = match_inputs(
-            source=item.source,
-            filters=item.farmer_uid,
-            number_of_rows=item.number_of_rows,
-        )
-
-        active_models: list[str] = config.hyperparams.get("models", {}).get("active", ["xgboost", "random_forest"])
-        result: dict = {}
-
-        for model_name in active_models:
-            model_result = run_inferences(
-                model_name=model_name,
-                original_data=original_data,
-                selected_data=selected_data,
-                feature_column=config.feature_column_36,
-                target_column=config.target_column_36,
-            )
-            result[f"result_{model_name}"] = model_result
-
-        db_utils.update_job_result(job_id, result)
-        logger.info("Job '%s' completed successfully", job_id)
-
-    except Exception as exc:
-        logger.error("Job '%s' failed: %s", job_id, exc, exc_info=True)
-        db_utils.update_job_error(job_id, str(exc))
