@@ -212,3 +212,9 @@ marimo/_lsp/
 __marimo__/
 notebooks/models/*.pkl
 notebooks/models/*.pkl
+
+# Docker secrets (NEVER commit real secret files)
+secrets/
+
+# PostgreSQL backup dumps
+backups/
