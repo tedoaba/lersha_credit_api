@@ -1,92 +1,158 @@
+"""New Prediction page — submit and poll an inference job via the backend API.
+
+All backend communication is handled exclusively through LershaAPIClient.
+No imports from backend.*, config.*, or src.* are permitted in this file.
+"""
 import pandas as pd
+import requests
 import streamlit as st
 
-from config.config import config
-from src.inference_pipeline import match_inputs, run_inferences
+from ui.utils.api_client import LershaAPIClient
 
 st.set_page_config(page_title="New Prediction", layout="wide")
 
+client = LershaAPIClient()
+
 st.title("New Prediction")
+
+# ── Data Source Selection ───────────────────────────────────────────────────
 
 source = st.radio(
     "Select Data Source",
     ["Single Value", "Batch Prediction"],
     index=0,
-    horizontal=True
+    horizontal=True,
 )
 
-original_df = None
-
+farmer_uid: str | None = None
+number_of_rows: int | None = None
 
 if source == "Single Value":
-    filters = st.text_input("Farmer UID")
-    if filters:
-        original_df, selected_df_36 = match_inputs(source=source, filters=filters)
-        st.dataframe(original_df.head())
-
+    farmer_uid = st.text_input("Farmer UID") or None
+    st.info("Enter a Farmer UID above. Data will be fetched from the backend on job submission.")
 
 elif source == "Batch Prediction":
-    st.info("Evaluation will run using the CSV file defined inside your backend config.")
-    number_of_rows = st.number_input("Number of rows to process", min_value=1, max_value=10, step=1)
-    original_df, selected_df_36 = match_inputs(source=source, number_of_rows=number_of_rows)
-    st.success(f"Fetched {number_of_rows} rows from database for evaluation.")
-    st.dataframe(original_df.head())
+    number_of_rows = int(st.number_input("Number of rows to process", min_value=1, max_value=100, step=1))
+    st.info(
+        f"Batch prediction will process {number_of_rows} randomly selected farmer record(s) "
+        "from the database via the backend API."
+    )
 
+# ── Prediction Submission ───────────────────────────────────────────────────
 
-if st.button("Run Prediction"):
-    st.info("Running evaluation… please wait.")
+if st.button("Run Prediction", type="primary"):
+    # Validate inputs before submission
+    if source == "Single Value" and not farmer_uid:
+        st.warning("Please enter a Farmer UID before running a Single Value prediction.")
+        st.stop()
+
+    st.write("---")
 
     try:
-        result_xgboost = run_inferences(model_name="xgboost", original_data=original_df, selected_data=selected_df_36, feature_column=config.feature_column_36, target_column=config.target_column_36)
-        result_random_forest = run_inferences(model_name="random_forest", original_data=original_df, selected_data=selected_df_36, feature_column=config.feature_column_36, target_column=config.target_column_36)
+        # Step 1: Submit the job
+        with st.spinner("Submitting inference job…"):
+            response = client.submit_prediction(
+                source=source,
+                farmer_uid=farmer_uid,
+                number_of_rows=number_of_rows,
+            )
 
-        st.success(f"Batch Evaluation Completed! Records processed: {result_xgboost['records_processed']}")
-        st.write("---")
+        job_id: str = response["job_id"]
+        st.success(f"✅ Job accepted — ID: `{job_id}`")
 
-        evaluations_xgboost = result_xgboost["evaluations"]
-        evaluations_random_forest = result_random_forest["evaluations"]
+        # Step 2: Poll until complete
+        with st.spinner("Running inference… this may take up to 5 minutes."):
+            job = client.poll_until_complete(job_id, poll_interval=2.0, max_wait=300.0)
 
-        st.header("Evaluation Output")
+    except requests.exceptions.ConnectionError:
+        st.error(
+            "🔌 Backend unavailable. Is the API server running? "
+            "Start it with `make api` or `uvicorn backend.main:app --reload --port 8000`."
+        )
+        st.stop()
+    except TimeoutError:
+        st.error("⏱ Inference timed out after 5 minutes. The job may still be running — check the Dashboard later.")
+        st.stop()
+    except requests.exceptions.HTTPError as exc:
+        if exc.response is not None and exc.response.status_code == 403:
+            st.error("🔐 Authentication failed. Check that API_KEY matches the backend configuration.")
+        else:
+            st.error(f"⚠ API error: {exc}")
+        st.stop()
 
-        col1, col2 = st.columns(2)
+    # ── Result Rendering ────────────────────────────────────────────────────
 
-        with col1:
-            st.subheader("Result with Xgboost Model")
-            for i, eval_row in enumerate(evaluations_xgboost):
-                with st.expander(f"Record #{i+1} — Prediction with {eval_row['model_name']}: {eval_row['predicted_class_name']}"):
-                    
-                    st.subheader("Prediction")
-                    st.write(f"**Model Name**: {eval_row['model_name']}")
-                    st.write(f"**Predicted Class**: {eval_row['predicted_class_name']}")
+    if job["status"] == "failed":
+        st.error(f"❌ Inference failed: {job.get('error', 'Unknown error')}")
+        st.stop()
 
-                    st.subheader("Top Feature Contributions")
-                    contrib_df = pd.DataFrame(eval_row["top_feature_contributions"])
+    result: dict = job.get("result") or {}
+    xgb_result: dict = result.get("result_xgboost", {})
+    rf_result: dict = result.get("result_random_forest", {})
+
+    records_processed = xgb_result.get("records_processed", 0)
+    st.success(f"✅ Batch Evaluation Completed! Records processed: {records_processed}")
+    st.write("---")
+
+    evaluations_xgboost: list = xgb_result.get("evaluations", [])
+    evaluations_random_forest: list = rf_result.get("evaluations", [])
+
+    st.header("Evaluation Output")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("Result with XGBoost Model")
+        if not evaluations_xgboost:
+            st.info("No XGBoost evaluation results available.")
+        for i, eval_row in enumerate(evaluations_xgboost):
+            with st.expander(
+                f"Record #{i + 1} — Prediction with {eval_row.get('model_name', 'xgboost')}: "
+                f"{eval_row.get('predicted_class_name', 'N/A')}"
+            ):
+                st.subheader("Prediction")
+                st.write(f"**Model Name**: {eval_row.get('model_name', 'xgboost')}")
+                st.write(f"**Predicted Class**: {eval_row.get('predicted_class_name', 'N/A')}")
+
+                st.subheader("Top Feature Contributions")
+                contributions = eval_row.get("top_feature_contributions", [])
+                if contributions:
+                    contrib_df = pd.DataFrame(contributions)
                     st.table(contrib_df)
+                else:
+                    st.write("No feature contributions available.")
 
-                    st.subheader("Explanation")
-                    st.write(eval_row["rag_explanation"])
+                st.subheader("Explanation")
+                st.write(eval_row.get("rag_explanation", "No explanation available."))
 
-        with col2:
-            st.subheader("Result with Random Forest Model")
-            for i, eval_row in enumerate(evaluations_random_forest):
-                with st.expander(f"Record #{i+1} — Prediction with {eval_row['model_name']}: {eval_row['predicted_class_name']}"):
-                    
-                    st.subheader("Prediction")
-                    st.write(f"**Model Name**: {eval_row['model_name']}")
-                    st.write(f"**Predicted Class**: {eval_row['predicted_class_name']}")
+    with col2:
+        st.subheader("Result with Random Forest Model")
+        if not evaluations_random_forest:
+            st.info("No Random Forest evaluation results available.")
+        for i, eval_row in enumerate(evaluations_random_forest):
+            with st.expander(
+                f"Record #{i + 1} — Prediction with {eval_row.get('model_name', 'random_forest')}: "
+                f"{eval_row.get('predicted_class_name', 'N/A')}"
+            ):
+                st.subheader("Prediction")
+                st.write(f"**Model Name**: {eval_row.get('model_name', 'random_forest')}")
+                st.write(f"**Predicted Class**: {eval_row.get('predicted_class_name', 'N/A')}")
 
-                    st.subheader("Top Feature Contributions")
-                    contrib_df = pd.DataFrame(eval_row["top_feature_contributions"])
+                st.subheader("Top Feature Contributions")
+                contributions = eval_row.get("top_feature_contributions", [])
+                if contributions:
+                    contrib_df = pd.DataFrame(contributions)
                     st.table(contrib_df)
+                else:
+                    st.write("No feature contributions available.")
 
-                    st.subheader("Explanation")
-                    st.write(eval_row["rag_explanation"])
+                st.subheader("Explanation")
+                st.write(eval_row.get("rag_explanation", "No explanation available."))
 
-        st.write("---")
+    st.write("---")
 
-    except Exception as e:
-        st.error(f"Error during evaluation: {e}")
 
+# ── Footer ──────────────────────────────────────────────────────────────────
 
 footer = """
 <style>
