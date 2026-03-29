@@ -57,12 +57,13 @@ services:
 
   # ── MLflow ────────────────────────────────────────────────────────────────
   mlflow:
-    image: python:3.12-slim
+    image: ghcr.io/mlflow/mlflow:latest
     command: >
-      bash -c "pip install mlflow && mlflow server
-      --host 0.0.0.0 --port 5000
-      --backend-store-uri /mlruns
-      --default-artifact-root /mlruns"
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri sqlite:///mlruns/mlflow.db
+      --default-artifact-root /mlruns
     restart: unless-stopped
     ports:
       - "5000:5000"
