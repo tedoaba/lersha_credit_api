@@ -8,6 +8,7 @@ Usage:
     client = LershaAPIClient()
     response = client.submit_prediction(source="Batch Prediction", number_of_rows=5)
 """
+
 from __future__ import annotations
 
 import os
@@ -35,6 +36,8 @@ class LershaAPIClient:
         self.base_url = (base_url or os.getenv("API_BASE_URL", "http://localhost:8000")).rstrip("/")
         self.api_key = api_key or os.getenv("API_KEY", "")
         self.timeout = timeout
+        self._connect_timeout = 5  # seconds to establish a TCP connection
+        self._read_timeout = 60  # seconds to wait for the server to respond
         self._session = requests.Session()
         self._session.headers.update({"X-API-Key": self.api_key, "Content-Type": "application/json"})
 
@@ -44,7 +47,7 @@ class LershaAPIClient:
         Returns:
             dict: ``{"status": "ok"|"degraded", "dependencies": {...}}``
         """
-        resp = self._session.get(f"{self.base_url}/health", timeout=self.timeout)
+        resp = self._session.get(f"{self.base_url}/health", timeout=(self._connect_timeout, self._read_timeout))
         resp.raise_for_status()
         return resp.json()
 
@@ -70,7 +73,9 @@ class LershaAPIClient:
         if number_of_rows is not None:
             payload["number_of_rows"] = number_of_rows
 
-        resp = self._session.post(f"{self.base_url}/v1/predict/", json=payload, timeout=self.timeout)
+        resp = self._session.post(
+            f"{self.base_url}/v1/predict/", json=payload, timeout=(self._connect_timeout, self._read_timeout)
+        )
         resp.raise_for_status()
         return resp.json()
 
@@ -83,7 +88,9 @@ class LershaAPIClient:
         Returns:
             dict: Job status response with ``status``, ``result``, and ``error`` fields.
         """
-        resp = self._session.get(f"{self.base_url}/v1/predict/{job_id}", timeout=self.timeout)
+        resp = self._session.get(
+            f"{self.base_url}/v1/predict/{job_id}", timeout=(self._connect_timeout, self._read_timeout)
+        )
         resp.raise_for_status()
         return resp.json()
 
@@ -123,6 +130,8 @@ class LershaAPIClient:
         params: dict = {"limit": limit}
         if model_name:
             params["model_name"] = model_name
-        resp = self._session.get(f"{self.base_url}/v1/results/", params=params, timeout=self.timeout)
+        resp = self._session.get(
+            f"{self.base_url}/v1/results/", params=params, timeout=(self._connect_timeout, self._read_timeout)
+        )
         resp.raise_for_status()
         return resp.json()
