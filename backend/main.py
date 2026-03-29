@@ -6,20 +6,70 @@ Production startup (via Dockerfile CMD):
         --workers 4 --bind 0.0.0.0:8000 --timeout 120
 
 Development (hot reload):
-    uvicorn backend.main:app --reload --port 8000
+    uvicorn backend.main:app --reload --reload-dir backend --port 8000
 
 The factory pattern (``create_app()``) enables easy test client instantiation:
     from fastapi.testclient import TestClient
     client = TestClient(create_app())
 """
 
-from fastapi import FastAPI
+# ── Pickle compatibility patch ──────────────────────────────────────────────
+# The pre-refactor sklearn Pipelines (.pkl files in backend/models/) were
+# trained when ``logic`` was a root-level package containing ``replace_inf``.
+# joblib.load() tries to import ``logic.smote_updated`` during
+# deserialization, which fails with ModuleNotFoundError after the cleanup.
+#
+# This patch registers the old module paths in sys.modules before any model
+# is loaded, pointing them at the canonical backend.core.preprocessing module.
+# All code stays inside backend/ — no root-level shim folder needed.
+#
+# Safe to remove once all .pkl artifacts have been retrained and re-pickled
+# using the backend.core.* import paths.
+import sys
+import types
+
+import backend.core.preprocessing as _preprocessing  # noqa: E402
+
+_logic_smote = types.ModuleType("logic.smote_updated")
+_logic_smote.replace_inf = _preprocessing.replace_inf  # type: ignore[attr-defined]
+
+_logic_pkg = types.ModuleType("logic")
+_logic_pkg.smote_updated = _logic_smote  # type: ignore[attr-defined]
+
+sys.modules.setdefault("logic", _logic_pkg)
+sys.modules.setdefault("logic.smote_updated", _logic_smote)
+# ── End compatibility patch ─────────────────────────────────────────────────
+
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI  # noqa: E402
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from backend.api.dependencies import limiter
 from backend.api.middleware import RequestIDMiddleware
 from backend.api.routers import health, predict, results
+from backend.logger.logger import get_logger
+
+logger = get_logger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Pre-warm heavy resources at server startup.
+
+    Imports rag_engine eagerly so the sentence-transformers model is loaded
+    from the local HuggingFace cache once at startup — not on the first
+    inference request. This avoids the ~30 s first-request delay.
+    """
+    logger.info("Pre-warming RAG engine (loading sentence-transformers from cache)...")
+    try:
+        import backend.chat.rag_engine  # noqa: F401 — side-effect import warms module cache
+        logger.info("RAG engine ready.")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("RAG engine pre-warm failed (non-fatal): %s", exc)
+    yield
+    # Shutdown: nothing to clean up.
 
 
 def create_app() -> FastAPI:
@@ -42,6 +92,7 @@ def create_app() -> FastAPI:
         ),
         docs_url="/docs",
         redoc_url="/redoc",
+        lifespan=lifespan,
     )
 
     # ── Rate limiter ────────────────────────────────────────────────────────

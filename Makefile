@@ -63,11 +63,17 @@ setup-chroma:
 # Both processes run concurrently; Ctrl-C in the current terminal stops the UI.
 # Close the API window separately to stop the backend.
 dev:
-	start "Lersha-API" cmd /k "uv run uvicorn backend.main:app --reload --port 8000 --host 0.0.0.0"
-	uv run streamlit run ui/Introduction.py --server.port 8501 --server.address 0.0.0.0
+	uv run uvicorn backend.main:app --reload --reload-dir backend --port 8000 --host 0.0.0.0 & \
+	API_PID=$$!; \
+	trap "kill $$API_PID 2>/dev/null; exit" INT TERM; \
+	echo "Waiting for API to be ready..."; \
+	until curl -sf http://localhost:8000/health > /dev/null 2>&1; do sleep 1; done; \
+	echo "API ready — starting UI..."; \
+	uv run streamlit run ui/Introduction.py --server.port 8501 --server.address 0.0.0.0; \
+	kill $$API_PID 2>/dev/null
 
 api:
-	uv run uvicorn backend.main:app --reload --port 8000 --host 0.0.0.0 --reload
+	uv run uvicorn backend.main:app --reload --reload-dir backend --port 8000 --host 0.0.0.0
 
 ui:
 	uv run streamlit run ui/Introduction.py --server.port 8501 --server.address 0.0.0.0

@@ -15,7 +15,9 @@ import json
 from datetime import datetime
 
 import joblib
-import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use("Agg")  # non-interactive, thread-safe — must be before pyplot import
+import matplotlib.pyplot as plt  # noqa: E402
 import mlflow
 import mlflow.sklearn
 import numpy as np
