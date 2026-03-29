@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py[codz]
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Test / coverage
+htmlcov/
+.coverage
+.coverage.*
+.pytest_cache/
+
+# Ruff
+.ruff_cache/
+
+# Mypy
+.mypy_cache/
+
+# uv
+# uv.lock is intentionally NOT excluded (committed for reproducibility)
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Model binaries (mounted from host or CI artifacts — not baked into image)
+# backend/models/  ← uncomment to exclude if models are mounted via volume
+
+# MLflow runs (mounted via Docker volume)
+mlruns/
+
+# ChromaDB (mounted via Docker volume)
+chroma_db/
+
+# Logs and output
+logs/
+output/
+
+# Git
+.git/
+.gitignore
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Specs / docs (not needed in container)
+specs/
+docs/
+*.md
