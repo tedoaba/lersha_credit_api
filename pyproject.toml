@@ -37,6 +37,12 @@ dependencies = [
     "streamlit>=1.35.0",
     "requests>=2.31.0",
     "slowapi>=0.1.9",
+    # ── Phase 8 hardening additions ───────────────────────────────────────
+    "alembic>=1.13",
+    "celery>=5.3",
+    "redis>=5.0",
+    "python-json-logger>=2.0",
+    "gunicorn>=21.2",
 ]
 
 [project.optional-dependencies]
@@ -84,3 +90,11 @@ omit = ["backend/tests/*", "backend/scripts/*"]
 [tool.coverage.report]
 show_missing = true
 fail_under = 80
+
+# ─── MyPy ─────────────────────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.12"
+strict = false
+ignore_missing_imports = true
+check_untyped_defs = true
+exclude = ["backend/tests", "backend/scripts"]
