@@ -1,0 +1,14 @@
+inference:
+  default_batch_size: 10
+  max_batch_size: 100
+  shap_max_samples: 100
+  rag_top_k: 5
+  job_timeout_minutes: 30
+
+models:
+  active:
+    - xgboost
+    - random_forest
+
+rate_limiting:
+  requests_per_minute: 10
