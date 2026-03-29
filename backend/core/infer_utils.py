@@ -17,6 +17,7 @@ from datetime import datetime
 import joblib
 import matplotlib.pyplot as plt
 import mlflow
+import mlflow.sklearn
 import numpy as np
 import pandas as pd
 import shap
@@ -60,8 +61,13 @@ def get_featured_data(df: pd.DataFrame) -> pd.DataFrame:
     return sample_data
 
 
-def load_prediction_models(model_name: str):
+def load_prediction_models(model_name: str) -> object:
     """Load a trained prediction model by name.
+
+    Attempts to load from the MLflow Model Registry first
+    (``models:/lersha-{model_name}/Production``). If the registry is
+    unreachable or the model has not yet been promoted to Production stage,
+    falls back to loading from the configured local ``.pkl`` path.
 
     Supported model names: ``"xgboost"``, ``"random_forest"``, ``"catboost"``.
 
@@ -73,26 +79,43 @@ def load_prediction_models(model_name: str):
 
     Raises:
         ValueError: If ``model_name`` is not recognised.
-        RuntimeError: If the model file cannot be loaded (wraps the original exception).
+        RuntimeError: If both the registry and the local ``.pkl`` fail to load.
     """
-    try:
-        if model_name == "xgboost":
-            model = joblib.load(config.xgb_model_36)
-        elif model_name == "random_forest":
-            model = joblib.load(config.rf_model_36)
-        elif model_name == "catboost":
-            model = joblib.load(config.cab_model_36)
-        else:
-            raise ValueError(f"Unknown model_name '{model_name}'. Expected: xgboost | random_forest | catboost")
+    pkl_path_map: dict[str, str] = {
+        "xgboost": config.xgb_model_36,
+        "random_forest": config.rf_model_36,
+        "catboost": config.cab_model_36,
+    }
 
-        mlflow.set_tag("model_source", model_name)
-        logger.info("Model '%s' loaded successfully", model_name)
+    if model_name not in pkl_path_map:
+        raise ValueError(f"Unknown model_name '{model_name}'. Expected: xgboost | random_forest | catboost")
+
+    # ── 1. Try MLflow Model Registry ──────────────────────────────────────────
+    registry_uri = f"models:/lersha-{model_name}/Production"
+    try:
+        model = mlflow.sklearn.load_model(registry_uri)
+        mlflow.set_tag("model_source", f"registry:{registry_uri}")
+        logger.info("Model '%s' loaded from MLflow registry (%s)", model_name, registry_uri)
         return model
-    except ValueError:
-        raise
-    except Exception as e:
-        logger.error("Error loading model '%s': %s", model_name, str(e))
-        raise RuntimeError(f"Failed to load model '{model_name}'") from e
+    except Exception as exc:  # noqa: BLE001 — intentional broad catch for registry fallback
+        logger.warning(
+            "MLflow registry unavailable for '%s' (%s); falling back to local pkl.",
+            model_name,
+            exc,
+        )
+
+    # ── 2. Fallback: load from local .pkl file ────────────────────────────────
+    pkl_path = pkl_path_map[model_name]
+    try:
+        model = joblib.load(pkl_path)
+        mlflow.set_tag("model_source", f"local:{pkl_path}")
+        logger.info("Model '%s' loaded from local pkl: %s", model_name, pkl_path)
+        return model
+    except Exception as exc:
+        logger.error("Failed to load model '%s' from local pkl '%s'", model_name, pkl_path, exc_info=True)
+        raise RuntimeError(
+            f"Failed to load model '{model_name}' from both MLflow registry and local pkl '{pkl_path}'"
+        ) from exc
 
 
 def xgb_model_evaluation(model, X, y, dataset_name: str = "Dataset"):
