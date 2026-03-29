@@ -1,7 +1,7 @@
 # Lersha Credit Scoring System — Makefile
 # Usage: make <target>
 
-.PHONY: help install setup-db setup-chroma lint format check-format ci-quality typecheck pre-commit test coverage api ui mlflow docker-build docker-up docker-down restore-db clean
+.PHONY: help install setup-db migrate db-stamp setup-chroma lint format check-format ci-quality typecheck pre-commit test coverage api ui mlflow docker-build docker-up docker-down restore-db clean
 
 # Default target
 help:
@@ -12,6 +12,8 @@ help:
 	@echo "Setup:"
 	@echo "  make install       Install all dependencies (uv sync + dev extras)"
 	@echo "  make setup-db      Initialise PostgreSQL schema and load CSV data"
+	@echo "  make migrate       Apply pending Alembic migrations (upgrade head)"
+	@echo "  make db-stamp      Stamp DB at current head (use after manual schema creation)"
 	@echo "  make setup-chroma  Populate ChromaDB credit_features collection"
 	@echo ""
 	@echo "Development:"
@@ -45,13 +47,19 @@ install:
 setup-db:
 	uv run python backend/scripts/db_init.py
 
+migrate:
+	uv run alembic -c backend/alembic.ini upgrade head
+
+db-stamp:
+	uv run alembic -c backend/alembic.ini stamp head
+
 setup-chroma:
 	uv run python backend/scripts/populate_chroma.py
 
 # ── Development ────────────────────────────────────────────────────────────────
 
 api:
-	uv run uvicorn backend.main:app --reload --port 8000 --host 0.0.0.0
+	uv run uvicorn backend.main:app --reload --port 8000 --host 0.0.0.0 --reload
 
 ui:
 	uv run streamlit run ui/Introduction.py --server.port 8501 --server.address 0.0.0.0
