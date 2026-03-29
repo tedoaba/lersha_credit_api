@@ -282,6 +282,26 @@ def create_job(job_id: str) -> None:
     logger.info("Created inference job '%s'", job_id)
 
 
+def update_job_status(job_id: str, status: str) -> None:
+    """Update the status field of an inference job.
+
+    Used to mark a job as ``'processing'`` before the pipeline result is
+    available, enabling accurate state visibility during polling.
+
+    Args:
+        job_id: UUID string of the job to update.
+        status: New status value — one of ``'pending'``, ``'processing'``,
+            ``'completed'``, ``'failed'``.
+    """
+    engine = db_engine()
+    with Session(engine) as session:
+        job = session.get(InferenceJobDB, job_id)
+        if job:
+            job.status = status
+            session.commit()
+    logger.info("Job '%s' status updated to '%s'", job_id, status)
+
+
 def update_job_result(job_id: str, result: dict) -> None:
     """Mark an inference job as completed and store its result payload.
 

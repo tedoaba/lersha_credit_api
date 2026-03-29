@@ -86,6 +86,7 @@ async def _run_prediction_background(job_id: str, item: PredictRequest) -> None:
         item: The original prediction request.
     """
     try:
+        db_utils.update_job_status(job_id, "processing")
         original_data, selected_data = match_inputs(
             source=item.source,
             filters=item.farmer_uid,
