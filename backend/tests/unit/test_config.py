@@ -3,6 +3,7 @@
 Verifies startup validation behaviour without requiring real environment
 variables — uses monkeypatching and temporary files.
 """
+
 from __future__ import annotations
 
 import importlib
@@ -40,9 +41,11 @@ def _fresh_config(tmp_hparams: Path | None = None, monkeypatch=None):
     if tmp_hparams is not None:
         with patch("backend.config.config.BASE_DIR", tmp_hparams.parent.parent):
             import backend.config.config as cfg_module  # noqa: PLC0415
+
             return cfg_module.Config()
     else:
         import backend.config.config as cfg_module  # noqa: PLC0415
+
         return cfg_module.Config()
 
 
@@ -76,6 +79,7 @@ class TestConfigHyperparamsGuard:
         # Patch BASE_DIR to point to tmp_path so the absent yaml triggers the guard
         with patch("backend.config.config.BASE_DIR", tmp_path):
             import backend.config.config as cfg_module  # noqa: PLC0415
+
             with pytest.raises(FileNotFoundError, match="hyperparams.yaml"):
                 cfg_module.Config()
 
@@ -102,6 +106,7 @@ class TestConfigHyperparamsGuard:
 
         with patch("backend.config.config.BASE_DIR", tmp_path):
             import backend.config.config as cfg_module  # noqa: PLC0415
+
             cfg = cfg_module.Config()
 
         assert cfg.hyperparams["inference"]["default_batch_size"] == 10

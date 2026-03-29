@@ -3,6 +3,7 @@
 All tests mock the SQLAlchemy session to avoid requiring a real database.
 Only pure Python behaviour is verified here — no DB, no Docker required.
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -34,8 +35,10 @@ class TestUpdateJobStatus:
 
         mock_engine = MagicMock()
 
-        with patch("backend.services.db_utils.db_engine", return_value=mock_engine), \
-             patch("backend.services.db_utils.Session", return_value=mock_session):
+        with (
+            patch("backend.services.db_utils.db_engine", return_value=mock_engine),
+            patch("backend.services.db_utils.Session", return_value=mock_session),
+        ):
             update_job_status("test-job-id", "processing")
 
         mock_session.get.assert_called_once()
@@ -54,8 +57,10 @@ class TestUpdateJobStatus:
 
         mock_engine = MagicMock()
 
-        with patch("backend.services.db_utils.db_engine", return_value=mock_engine), \
-             patch("backend.services.db_utils.Session", return_value=mock_session):
+        with (
+            patch("backend.services.db_utils.db_engine", return_value=mock_engine),
+            patch("backend.services.db_utils.Session", return_value=mock_session),
+        ):
             update_job_status("non-existent-id", "processing")
 
         mock_session.commit.assert_not_called()
@@ -71,8 +76,10 @@ class TestUpdateJobStatus:
 
         mock_engine = MagicMock()
 
-        with patch("backend.services.db_utils.db_engine", return_value=mock_engine), \
-             patch("backend.services.db_utils.Session", return_value=mock_session):
+        with (
+            patch("backend.services.db_utils.db_engine", return_value=mock_engine),
+            patch("backend.services.db_utils.Session", return_value=mock_session),
+        ):
             update_job_status("job-id", status)
 
         assert mock_job.status == status

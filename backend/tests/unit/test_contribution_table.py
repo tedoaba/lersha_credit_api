@@ -1,4 +1,5 @@
 """Unit tests for build_contribution_table in backend/core/infer_utils.py."""
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -27,7 +28,7 @@ def test_catboost_list_input(single_row_df):
     # Simulate CatBoost: list of (1 sample, 3 features) arrays
     shap_values = [
         np.array([[0.1, -0.2, 0.05]]),  # class 0
-        np.array([[0.4, 0.3, -0.1]]),   # class 1
+        np.array([[0.4, 0.3, -0.1]]),  # class 1
     ]
     result = build_contribution_table(single_row_df, shap_values, pred_class_index=1)
     assert len(result) == 3

@@ -1,4 +1,5 @@
 """Unit tests for backend/core/preprocessing.py."""
+
 import pickle
 import tempfile
 from pathlib import Path
@@ -35,12 +36,14 @@ def test_load_features_missing_file():
 
 def test_preprocessing_output_columns_match_pkl(feature_pkl):
     """After encoding, columns should match the canonical feature list exactly."""
-    df = pd.DataFrame({
-        "gender": ["Male"],
-        "age_group": ["Early_Middle"],
-        "net_income": [12000.0],
-        "family_size": [5],
-    })
+    df = pd.DataFrame(
+        {
+            "gender": ["Male"],
+            "age_group": ["Early_Middle"],
+            "net_income": [12000.0],
+            "family_size": [5],
+        }
+    )
     result = preprocessing_categorical_features(df, feature_pkl)
     canonical = load_features(feature_pkl)
     assert list(result.columns) == canonical
@@ -48,11 +51,13 @@ def test_preprocessing_output_columns_match_pkl(feature_pkl):
 
 def test_missing_columns_filled_with_zero(feature_pkl):
     """Columns in the canonical list but absent from input should be filled with 0."""
-    df = pd.DataFrame({
-        "net_income": [5000.0],
-        "family_size": [3],
-        # gender and age_group are missing → should be filled as 0
-    })
+    df = pd.DataFrame(
+        {
+            "net_income": [5000.0],
+            "family_size": [3],
+            # gender and age_group are missing → should be filled as 0
+        }
+    )
     result = preprocessing_categorical_features(df, feature_pkl)
     assert result["gender_Male"].iloc[0] == 0
     assert result["age_group_Early_Middle"].iloc[0] == 0
@@ -60,12 +65,14 @@ def test_missing_columns_filled_with_zero(feature_pkl):
 
 def test_output_shape_equals_feature_list(feature_pkl):
     """Output DataFrame should have exactly len(feature_columns) columns."""
-    df = pd.DataFrame({
-        "gender": ["Female"],
-        "age_group": ["Young"],
-        "net_income": [8000.0],
-        "family_size": [4],
-    })
+    df = pd.DataFrame(
+        {
+            "gender": ["Female"],
+            "age_group": ["Young"],
+            "net_income": [8000.0],
+            "family_size": [4],
+        }
+    )
     result = preprocessing_categorical_features(df, feature_pkl)
     canonical = load_features(feature_pkl)
     assert result.shape[1] == len(canonical)
