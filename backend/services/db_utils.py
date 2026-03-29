@@ -12,6 +12,7 @@ Bug fixes applied in monorepo refactor (2026-03-29):
   - save_batch_evaluations: migrated from deprecated Session(bind=engine)
     to SQLAlchemy 2.x Session(engine) context manager.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -31,41 +32,35 @@ logger = get_logger(__name__)
 
 # ── Engine factory ──────────────────────────────────────────────────────────
 
+
+# TODO: Refactor to a module-level singleton via functools.lru_cache (or a
+# lazy-init _engine variable) so the connection pool is truly shared across
+# all calls within a worker process.  Currently each call creates a new engine
+# instance with its own pool, which limits pooling effectiveness under load.
 def db_engine():
-    """Create and return a SQLAlchemy engine using ``config.db_uri``."""
-    return create_engine(config.db_uri)
+    """Create and return a pooled SQLAlchemy engine using ``config.db_uri``.
 
-
-# ── Schema bootstrap ────────────────────────────────────────────────────────
-
-def create_candidate_result_table(table_name: str) -> None:
-    """Create the candidate_result table if it does not already exist.
-
-    Args:
-        table_name: Name of the table to create.
+    Pool settings (PostgreSQL only — SQLite uses the default single-thread pool):
+      pool_size=10      : up to 10 persistent connections per engine instance
+      max_overflow=20   : up to 20 additional connections under peak load
+      pool_pre_ping=True: validate connections before use (recovers after DB restart)
+      pool_recycle=3600 : recycle connections after 1 hour to avoid stale sockets
     """
-    engine = db_engine()
-    create_table_query = text(f"""
-    CREATE TABLE IF NOT EXISTS {table_name} (
-        id SERIAL PRIMARY KEY,
-        farmer_uid VARCHAR(100) NOT NULL,
-        first_name VARCHAR(100),
-        middle_name VARCHAR(100),
-        last_name VARCHAR(100),
-        predicted_class_name VARCHAR(100) NOT NULL,
-        top_feature_contributions JSONB NOT NULL,
-        rag_explanation TEXT NOT NULL,
-        model_name TEXT NOT NULL,
-        timestamp TIMESTAMPTZ NOT NULL
-    );
-    """)
-    with engine.connect() as conn:
-        conn.execute(create_table_query)
-        conn.commit()
-    logger.info("Table '%s' created (or already exists)", table_name)
+    uri = config.db_uri
+    # Pool settings only apply to PostgreSQL; SQLite (e.g. in tests) uses defaults
+    if uri.startswith("postgresql"):
+        return create_engine(
+            uri,
+            pool_size=10,
+            max_overflow=20,
+            pool_pre_ping=True,
+            pool_recycle=3600,
+        )
+    return create_engine(uri)
 
 
 # ── Data load ───────────────────────────────────────────────────────────────
+
 
 def load_data_to_database(csv_path: str, table_name: str) -> None:
     """Load a CSV file into the database, replacing any existing data.
@@ -82,6 +77,7 @@ def load_data_to_database(csv_path: str, table_name: str) -> None:
 
 
 # ── Read helpers ────────────────────────────────────────────────────────────
+
 
 def get_data_from_database(table_name: str) -> pd.DataFrame:
     """Fetch all rows from a table.
@@ -207,6 +203,7 @@ def get_row_by_number(table: str, row_number: int, order_by: str = "age") -> pd.
 
 # ── Write helpers ───────────────────────────────────────────────────────────
 
+
 def save_batch_evaluations(input_df: pd.DataFrame, evaluation_results: list) -> bool:
     """Persist a batch of evaluation records to the candidate_result table.
 
@@ -261,6 +258,7 @@ def save_batch_evaluations(input_df: pd.DataFrame, evaluation_results: list) -> 
 
 
 # ── Inference job CRUD ──────────────────────────────────────────────────────
+
 
 def create_job(job_id: str) -> None:
     """Insert a new inference job row with status 'pending'.
@@ -375,9 +373,7 @@ def get_all_results(limit: int = 500, model_name: str | None = None) -> list[dic
     """
     engine = db_engine()
     if model_name:
-        query = text(
-            "SELECT * FROM candidate_result WHERE model_name = :mn ORDER BY timestamp DESC LIMIT :lim"
-        )
+        query = text("SELECT * FROM candidate_result WHERE model_name = :mn ORDER BY timestamp DESC LIMIT :lim")
         params: dict = {"mn": model_name, "lim": limit}
     else:
         query = text("SELECT * FROM candidate_result ORDER BY timestamp DESC LIMIT :lim")

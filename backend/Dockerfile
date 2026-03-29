@@ -23,4 +23,11 @@ EXPOSE 8000
 
 ENV PYTHONPATH=/app
 
-CMD ["uv", "run", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Dev alternative (hot reload, single worker):
+#   uv run uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+#
+# Production: run Alembic migrations first, then start Gunicorn with 4 Uvicorn workers.
+# --workers 4       : one master + 4 worker processes
+# --worker-class    : Uvicorn's async ASGI worker
+# --timeout 120     : generous timeout for inference requests
+CMD ["sh", "-c", "uv run alembic -c backend/alembic.ini upgrade head && uv run gunicorn backend.main:app --worker-class uvicorn.workers.UvicornWorker --workers 4 --bind 0.0.0.0:8000 --timeout 120"]
