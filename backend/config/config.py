@@ -123,11 +123,13 @@ class Config:
 
         # ── Hyperparameters from YAML ──────────────────────────────────────
         _hparams_path = BASE_DIR / "backend" / "config" / "hyperparams.yaml"
-        if _hparams_path.exists():
-            with open(_hparams_path, encoding="utf-8") as f:
-                self.hyperparams: dict = yaml.safe_load(f) or {}
-        else:
-            self.hyperparams = {}
+        if not _hparams_path.exists():
+            raise FileNotFoundError(
+                f"Required hyperparameters file not found: {_hparams_path}. "
+                "Ensure backend/config/hyperparams.yaml exists before starting the application."
+            )
+        with open(_hparams_path, encoding="utf-8") as f:
+            self.hyperparams: dict = yaml.safe_load(f) or {}
 
         # ── Ensure required directories exist ─────────────────────────────
         for directory in (self.output_dir, self.model_dir, self.log_dir):
