@@ -1,0 +1,99 @@
+# docker-compose.prod.yml — PRODUCTION OVERRIDES
+#
+# Merge with base:  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# What this file adds / changes vs. the base:
+#   - caddy:   Reverse proxy with HTTPS (Let's Encrypt auto-cert)
+#   - backend: Gunicorn (4 workers) + runs alembic migrations on start
+#   - worker:  Docker secrets mounted
+#   - mlflow:  PostgreSQL backend + S3/GCS artifact store
+#   - backup:  Daily pg_dump with 30-day retention
+#   - Secrets: api_key + gemini_api_key injected as Docker secrets (never in env)
+#   - Volumes: caddy_data + caddy_config for TLS certificate cache
+#
+# OPERATOR CHECKLIST (before first deployment):
+#   1. Create secrets/api_key and secrets/gemini_api_key files (see secrets/README.md)
+#   2. Edit Caddyfile: replace "your-domain.com" with your real domain
+#   3. Create the MLflow database: docker compose exec postgres psql -U ${POSTGRES_USER} -c "CREATE DATABASE mlflow;"
+#   4. Set all required env vars in .env (see .env.example)
+
+secrets:
+  api_key:
+    file: ./secrets/api_key
+  gemini_api_key:
+    file: ./secrets/gemini_api_key
+
+services:
+  # ── Caddy Reverse Proxy (HTTPS termination) ────────────────────────────────
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - ui
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  # ── FastAPI Backend (Gunicorn + Alembic migrations) ────────────────────────
+  backend:
+    command: >
+      sh -c "uv run alembic upgrade head &&
+             uv run gunicorn backend.main:app
+             --workers 4
+             --worker-class uvicorn.workers.UvicornWorker
+             --bind 0.0.0.0:8000"
+    secrets:
+      - api_key
+      - gemini_api_key
+
+  # ── Celery Worker (shared secrets with backend) ────────────────────────────
+  worker:
+    secrets:
+      - api_key
+      - gemini_api_key
+
+  # ── MLflow Tracking Server (PostgreSQL backend + S3 artifacts) ─────────────
+  #
+  # BEFORE FIRST STARTUP: Create the mlflow database in PostgreSQL:
+  #   docker compose exec postgres psql -U ${POSTGRES_USER} -c "CREATE DATABASE mlflow;"
+  #
+  # GCS alternative: replace --default-artifact-root with gs://your-bucket/artifacts
+  # and set GOOGLE_APPLICATION_CREDENTIALS in environment instead of AWS vars.
+  mlflow:
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/mlflow
+      --default-artifact-root s3://${MLFLOW_S3_BUCKET}/artifacts
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      # GCS alternative: GOOGLE_APPLICATION_CREDENTIALS: /path/to/service-account.json
+
+  # ── PostgreSQL Backup (daily pg_dump with retention policy) ───────────────
+  backup:
+    image: prodrigestivill/postgres-backup-local
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-lersha}
+      POSTGRES_USER: ${POSTGRES_USER:-lersha}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lersha}
+      SCHEDULE: "@daily"
+      BACKUP_KEEP_DAYS: "30"
+      BACKUP_KEEP_WEEKS: "4"
+      BACKUP_KEEP_MONTHS: "6"
+    volumes:
+      - ./backups:/backups
+
+volumes:
+  caddy_data:
+  caddy_config:
