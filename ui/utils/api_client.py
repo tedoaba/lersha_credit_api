@@ -15,6 +15,11 @@ import os
 import time
 
 import requests
+from dotenv import load_dotenv
+
+# Load .env so API_KEY is available when Streamlit is launched via `make ui`
+# (the shell does not automatically export variables from .env)
+load_dotenv()
 
 
 class LershaAPIClient:
