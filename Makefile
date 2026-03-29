@@ -1,7 +1,7 @@
 # Lersha Credit Scoring System — Makefile
 # Usage: make <target>
 
-.PHONY: help install setup-db setup-chroma lint format check-format test coverage api ui mlflow docker-build docker-up docker-down clean
+.PHONY: help install setup-db setup-chroma lint format check-format ci-quality test coverage api ui mlflow docker-build docker-up docker-down clean
 
 # Default target
 help:
@@ -23,6 +23,7 @@ help:
 	@echo "  make lint          Run ruff linter on backend/ and ui/"
 	@echo "  make format        Auto-format backend/ and ui/ with ruff"
 	@echo "  make check-format  Check formatting without applying changes"
+	@echo "  make ci-quality    Run lint + format check (CI quality gate)"
 	@echo "  make test          Run the full test suite"
 	@echo "  make coverage      Run tests with HTML coverage report"
 	@echo ""
@@ -65,6 +66,8 @@ format:
 
 check-format:
 	uv run ruff format --check backend/ ui/
+
+ci-quality: lint check-format
 
 test:
 	uv run pytest backend/tests/ -v

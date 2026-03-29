@@ -16,6 +16,7 @@ build/
 *.egg-info/
 
 # Test / coverage
+backend/tests/
 htmlcov/
 .coverage
 .coverage.*
