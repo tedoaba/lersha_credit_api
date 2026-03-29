@@ -10,6 +10,7 @@ __pycache__/
 mlruns/
 backup/
 output/
+chroma_db/
 
 # Distribution / packaging
 .Python
