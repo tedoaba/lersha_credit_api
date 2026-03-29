@@ -1,7 +1,26 @@
 """FastAPI dependency functions for the Lersha Credit Scoring API."""
-from fastapi import Header, HTTPException, status
+
+from fastapi import Header, HTTPException, Request, status
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from backend.config.config import config
+
+
+def _get_remote_address(request: Request) -> str:
+    """Get the remote IP address with a fallback for test/proxy environments.
+
+    Returns ``"127.0.0.1"`` when ``request.client`` is ``None`` (e.g. in tests
+    using ``httpx.AsyncClient`` with ``ASGITransport``).
+    """
+    if request.client is None:
+        return "127.0.0.1"
+    return get_remote_address(request)
+
+
+# ── Rate limiter ──────────────────────────────────────────────────────────────
+# Keyed by client remote IP address. Attached to app.state in create_app().
+limiter = Limiter(key_func=_get_remote_address)
 
 
 async def require_api_key(x_api_key: str = Header(..., alias="X-API-Key")) -> None:
