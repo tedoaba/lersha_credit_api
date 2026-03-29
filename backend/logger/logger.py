@@ -1,63 +1,58 @@
 """Logger module for the Lersha Credit Scoring backend.
 
-Provides a production-ready rotating file + console logger.
-Usage: from backend.logger.logger import get_logger
-       logger = get_logger(__name__)
-"""
-import logging
-import logging.handlers
+Provides a structured JSON logger for production use.
+In containerised deployments log lines are captured by the container runtime
+from stdout; no file rotation is needed.
 
-from backend.config.config import config
+Usage::
+
+    from backend.logger.logger import get_logger
+    logger = get_logger(__name__)
+"""
+
+import logging
+
+from pythonjsonlogger.json import JsonFormatter
 
 
 def get_logger(
     name: str = __name__,
-    log_file: str = None,
+    log_file: str | None = None,  # kept for API compatibility — unused in container mode
     level: int = logging.INFO,
-    max_bytes: int = 10 * 1024 * 1024,  # 10 MB
-    backup_count: int = 5,
+    max_bytes: int = 10 * 1024 * 1024,  # kept for API compatibility — unused
+    backup_count: int = 5,  # kept for API compatibility — unused
 ) -> logging.Logger:
-    """Return a production-ready logger instance.
+    """Return a production-ready JSON logger instance.
+
+    All log output is written to stdout as newline-delimited JSON.  Every log
+    line includes ``asctime``, ``levelname``, ``name``, and ``message`` fields
+    so that log-aggregation systems (Datadog, CloudWatch, Loki) can parse
+    individual fields without custom parsing rules.
+
+    The ``log_file``, ``max_bytes``, and ``backup_count`` parameters are
+    preserved for backward compatibility but are ignored — containers must not
+    write logs to the container filesystem.
 
     Args:
         name: Logger name, usually ``__name__`` from the calling module.
-        log_file: Path to the log file. Defaults to ``config.log_file``.
+        log_file: Ignored (kept for API compatibility).
         level: Logging level (e.g. ``logging.INFO``).
-        max_bytes: Max size of a log file before rotation.
-        backup_count: Number of backup log files to keep.
+        max_bytes: Ignored (kept for API compatibility).
+        backup_count: Ignored (kept for API compatibility).
 
     Returns:
-        logging.Logger: Configured logger instance with console + rotating file handlers.
+        logging.Logger: Configured logger with a single JSON stdout handler.
     """
-    if log_file is None:
-        log_file = config.log_file
-
     logger = logging.getLogger(name)
     logger.setLevel(level)
     logger.propagate = False
 
-    formatter = logging.Formatter(
-        "[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-
-    # Console handler — added only once
-    if not any(isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler) for h in logger.handlers):
-        ch = logging.StreamHandler()
-        ch.setLevel(level)
-        ch.setFormatter(formatter)
-        logger.addHandler(ch)
-
-    # Rotating file handler — added only once
-    if not any(isinstance(h, logging.handlers.RotatingFileHandler) for h in logger.handlers):
-        fh = logging.handlers.RotatingFileHandler(
-            filename=str(log_file),
-            maxBytes=max_bytes,
-            backupCount=backup_count,
-            encoding="utf-8",
-        )
-        fh.setLevel(level)
-        fh.setFormatter(formatter)
-        logger.addHandler(fh)
+    # Add handler only once (guards against repeated get_logger() calls)
+    if not any(isinstance(h, logging.StreamHandler) for h in logger.handlers):
+        handler = logging.StreamHandler()
+        handler.setLevel(level)
+        formatter = JsonFormatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
 
     return logger
