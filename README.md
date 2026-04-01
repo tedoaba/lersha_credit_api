@@ -16,7 +16,7 @@ The UI communicates with the backend **exclusively over HTTP**. It imports no ba
 backend/api/        HTTP layer — routing, auth, rate limiting
 backend/core/       ML pipeline — feature engineering, preprocessing, inference, SHAP
 backend/services/   Data layer — all PostgreSQL operations
-backend/chat/       RAG engine — ChromaDB retrieval + Gemini generation
+backend/chat/       RAG engine — pgvector SQL retrieval + Gemini generation
 backend/config/     Config singleton — env-var driven, fails fast on missing secrets
 backend/worker.py   Celery task definition (async inference in production)
 ui/                 Streamlit pages — zero backend imports
@@ -50,7 +50,7 @@ lersha_credit_api/
 │   │       ├── predict.py        # POST /v1/predict, GET /v1/predict/{job_id}
 │   │       └── results.py        # GET /v1/results
 │   ├── chat/
-│   │   └── rag_engine.py         # ChromaDB retrieval + Gemini generation
+│   │   └── rag_engine.py         # pgvector SQL retrieval + Gemini generation
 │   ├── config/
 │   │   ├── config.py             # Env-var singleton (single source of truth)
 │   │   └── hyperparams.yaml      # Externalized tuning knobs
@@ -64,7 +64,7 @@ lersha_credit_api/
 │   ├── models/                   # Pre-trained .pkl artifacts (git-tracked)
 │   ├── scripts/
 │   │   ├── db_init.py            # Bootstrap DB from CSVs
-│   │   └── populate_chroma.py    # Load feature definitions into ChromaDB
+│   │   └── populate_pgvector.py  # Load feature definitions into rag_documents (pgvector)
 │   ├── services/
 │   │   ├── db_utils.py           # All PostgreSQL CRUD (single source of truth)
 │   │   ├── db_model.py           # SQLAlchemy ORM models
@@ -155,11 +155,20 @@ make migrate
 ### 4 — Populate the RAG vector store
 
 ```bash
-make setup-chroma
+uv run python -m backend.scripts.populate_pgvector
 ```
 
-This loads agricultural feature definitions into ChromaDB so the Gemini
-explanation engine has retrieval context. Run once after first setup.
+This embeds and upserts all 34 agricultural feature definitions into the
+`rag_documents` PostgreSQL table (powered by the `pgvector` extension) so the
+Gemini explanation engine has retrieval context. The script is fully idempotent —
+re-running it updates existing rows without creating duplicates.
+
+> **pgvector Migration** (006-migrate-chroma-pgvector, 2026-04-01)
+> The vector store was migrated from ChromaDB to PostgreSQL pgvector for
+> transactional consistency and a unified data layer. The `postgres` Docker image
+> must be `pgvector/pgvector:pg16` (already set in `docker-compose.yml`).
+> See [`specs/006-migrate-chroma-pgvector/quickstart.md`](specs/006-migrate-chroma-pgvector/quickstart.md)
+> for the full developer guide including rollback instructions.
 
 ### 5 — Start the services
 
@@ -207,10 +216,12 @@ required variables are missing.
 | `CANDIDATE_RESULT` | `candidate_result` | Table for inference results |
 | `REDIS_URL` | `redis://localhost:6379/0` | Celery broker (production only) |
 | `CELERY_TASK_ALWAYS_EAGER` | `false` | `true` = run inference in-process (local dev, no Redis needed) |
-| `CHROMA_DB_PATH` | `chroma_db` | ChromaDB persistent storage path |
-| `EMBEDDER_MODEL` | `all-MiniLM-L6-v2` | Sentence-Transformers embedding model |
+| `EMBEDDER_MODEL` | `all-MiniLM-L6-v2` | Sentence-Transformers embedding model (used by pgvector RAG) |
 | `API_BASE_URL` | `http://localhost:8000` | Backend URL used by the Streamlit UI |
 | `MLFLOW_TRACKING_URI` | `mlruns/` | MLflow backend store URI |
+
+> **Note**: `rag_top_k` and `rag_similarity_threshold` are tuned in
+> `backend/config/hyperparams.yaml`, not as environment variables.
 
 ---
 
@@ -307,7 +318,8 @@ make install        # Install all dependencies (uv sync + dev extras)
 make setup-db       # Bootstrap PostgreSQL tables from CSVs
 make migrate        # Apply pending Alembic migrations (upgrade head)
 make db-stamp       # Stamp DB at current head (use after manual schema creation)
-make setup-chroma   # Populate ChromaDB credit_features collection
+make migrate        # Apply Alembic migrations (includes pgvector extension + RAG tables)
+uv run python -m backend.scripts.populate_pgvector  # Populate rag_documents table
 
 # ── Development ────────────────────────────────────────────────
 make dev            # Start API (new window) + UI (current terminal)
@@ -385,6 +397,8 @@ Managed by **Alembic**. Run `make migrate` to apply all pending versions.
 | `farmer_data_all` | Raw farmer input records (bootstrapped from CSV) |
 | `candidate_result` | Inference results with SHAP contributions and RAG explanations |
 | `inference_jobs` | Async job state tracking (`pending/processing/completed/failed`) |
+| `rag_documents` | Knowledge documents with `VECTOR(384)` embeddings (pgvector RAG store) |
+| `rag_audit_log` | Immutable retrieval event log — every RAG query recorded for compliance |
 
 ### Adding a schema change
 
@@ -418,7 +432,8 @@ backend/tests/
 │   └── test_contribution_table.py
 └── integration/
     ├── test_predict_endpoint.py   # Full HTTP contract, auth, job polling
-    └── test_db_utils.py           # Real DB queries, parameterised WHERE clauses
+    ├── test_db_utils.py           # Real DB queries, parameterised WHERE clauses
+    └── test_rag_pgvector.py       # pgvector similarity, audit log, latency SLA
 ```
 
 All Gemini API calls are mocked in tests via `pytest-mock` to avoid real API usage in CI.
@@ -435,7 +450,7 @@ All Gemini API calls are mocked in tests via `pytest-mock` to avoid real API usa
 | [SQLAlchemy 2](https://docs.sqlalchemy.org/) | ORM and connection pooling |
 | [Alembic](https://alembic.sqlalchemy.org/) | Database schema migrations |
 | [Celery](https://docs.celeryq.dev/) | Distributed task queue (production async inference) |
-| [ChromaDB](https://docs.trychroma.com/) | Persistent vector store for RAG |
+| [pgvector](https://github.com/pgvector/pgvector) | PostgreSQL vector extension for semantic RAG retrieval |
 | [google-genai](https://ai.google.dev/gemini-api/docs) | Gemini LLM client |
 | [SHAP](https://shap.readthedocs.io/) | Model explainability |
 | [MLflow](https://mlflow.org/) | Experiment and artifact tracking |

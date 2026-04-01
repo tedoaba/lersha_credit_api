@@ -1,7 +1,7 @@
 # Lersha Credit Scoring System — Makefile
 # Usage: make <target>
 
-.PHONY: help install setup-db migrate db-stamp setup-chroma lint format check-format ci-quality typecheck pre-commit test coverage dev api ui mlflow docker-build docker-up docker-down restore-db clean
+.PHONY: help install setup-db migrate db-stamp setup-rag lint format check-format ci-quality typecheck pre-commit test coverage dev api ui mlflow docker-build docker-up docker-down restore-db clean
 
 # Default target
 help:
@@ -14,7 +14,7 @@ help:
 	@echo "  make setup-db      Initialise PostgreSQL schema and load CSV data"
 	@echo "  make migrate       Apply pending Alembic migrations (upgrade head)"
 	@echo "  make db-stamp      Stamp DB at current head (use after manual schema creation)"
-	@echo "  make setup-chroma  Populate ChromaDB credit_features collection"
+	@echo "  make setup-rag      Populate rag_documents table (pgvector knowledge base)"
 	@echo ""
 	@echo "Development:"
 	@echo "  make dev           Start API (new window) + UI (current terminal)"
@@ -54,15 +54,15 @@ migrate:
 db-stamp:
 	uv run alembic -c backend/alembic.ini stamp head
 
-setup-chroma:
-	uv run python backend/scripts/populate_chroma.py
+setup-rag:
+	uv run python -m backend.scripts.populate_pgvector
 
 # ── Development ────────────────────────────────────────────────────────────────
 
 # Starts the API in a new terminal window and the UI in the current terminal.
 # Both processes run concurrently; Ctrl-C in the current terminal stops the UI.
 # Close the API window separately to stop the backend.
-dev:
+dev: migrate
 	uv run uvicorn backend.main:app --reload --reload-dir backend --port 8000 --host 0.0.0.0 & \
 	API_PID=$$!; \
 	trap "kill $$API_PID 2>/dev/null; exit" INT TERM; \
