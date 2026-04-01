@@ -4,7 +4,6 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from backend.config.config import config
 from backend.logger.logger import get_logger
 from backend.services.db_utils import db_engine
 
@@ -22,18 +21,21 @@ async def root() -> dict:
 async def health_check() -> JSONResponse:
     """Live dependency health check.
 
-    Performs a real ``SELECT 1`` against PostgreSQL and a ChromaDB heartbeat.
-    Returns HTTP 200 with ``{"db":"ok","chroma":"ok"}`` if all dependencies
-    are healthy, or HTTP 503 with the failing key showing the error reason.
-    """
-    import chromadb
+    Performs a real ``SELECT 1`` against PostgreSQL and a pgvector extension
+    existence check.  Returns HTTP 200 with ``{"db":"ok","pgvector":"ok"}``
+    if all dependencies are healthy, or HTTP 503 with the failing key showing
+    the error reason.
 
+    Migrated in 006-migrate-chroma-pgvector (2026-04-01):
+        Replaced ChromaDB heartbeat probe with pgvector extension check.
+    """
     health: dict[str, str] = {}
     all_ok = True
 
-    # PostgreSQL check
+    engine = db_engine()
+
+    # PostgreSQL connectivity check
     try:
-        engine = db_engine()
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         health["db"] = "ok"
@@ -42,14 +44,18 @@ async def health_check() -> JSONResponse:
         health["db"] = f"error: {exc}"
         all_ok = False
 
-    # ChromaDB check
+    # pgvector extension check (validates the vector extension is installed and active)
     try:
-        client = chromadb.PersistentClient(path=str(config.chroma_db_path))
-        client.heartbeat()
-        health["chroma"] = "ok"
+        with engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT 1 FROM pg_catalog.pg_extension WHERE extname = 'vector'")
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("pgvector extension not found in pg_catalog.pg_extension")
+        health["pgvector"] = "ok"
     except Exception as exc:
-        logger.error("ChromaDB health check failed: %s", exc)
-        health["chroma"] = f"error: {exc}"
+        logger.error("pgvector health check failed: %s", exc)
+        health["pgvector"] = f"error: {exc}"
         all_ok = False
 
     status_code = 200 if all_ok else 503
