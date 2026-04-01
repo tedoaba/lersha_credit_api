@@ -1,71 +1,156 @@
-"""RAG explanation engine using ChromaDB (persistent) and Google Gemini.
+"""RAG explanation engine using PostgreSQL pgvector and Google Gemini.
 
-Fixed in monorepo refactor (2026-03-29):
-  - Replaced ephemeral ``chromadb.Client()`` with ``chromadb.PersistentClient``
-    so the vector store survives service restarts.
-  - Re-enabled at the pipeline layer (previously commented out).
+Migrated in 006-migrate-chroma-pgvector (2026-04-01):
+  - Replaced ChromaDB PersistentClient with pgvector SQL queries via SQLAlchemy.
+  - retrieve_docs() now executes a parameterised cosine-distance SELECT and
+    writes an audit row to rag_audit_log after every retrieval (including
+    empty results).
+  - get_rag_explanation() now accepts optional job_id and model_name for full
+    audit trail population.
 
 Hardened in 004-harden-app-security (2026-03-29):
-  - Gemini generate_content call extracted to ``_call_gemini()`` helper.
-  - Both ``get_rag_explanation()`` and ``_call_gemini()`` are decorated with
-    ``@retry`` (up to 3 attempts, exponential backoff 2–10 s) so transient
-    network or quota errors are handled automatically.
+  - Gemini generate_content call extracted to _call_gemini() helper.
+  - Both get_rag_explanation() and _call_gemini() are decorated with
+    @retry (up to 3 attempts, exponential backoff 2-10 s).
 """
 
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
-import chromadb
 import yaml
-from chromadb.utils import embedding_functions
 from google.genai import Client as GeminiClient
+from sentence_transformers import SentenceTransformer
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from backend.config.config import config
 from backend.logger.logger import get_logger
+from backend.services.db_utils import db_engine
+from backend.services.db_model import RagAuditLogDB
 
 logger = get_logger(__name__)
 
-# ── Embedding function ──────────────────────────────────────────────────────
-embedder = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=config.embedder_model)
+# ── Embedding model ────────────────────────────────────────────────────────────
+# Loaded once at module import to avoid the ~30 s weight-loading penalty on the
+# first inference request.  The model name is read from config so it is
+# changeable without code edits.
+_embedder: SentenceTransformer = SentenceTransformer(config.embedder_model)
 
-# ── Gemini client ─────────────────────────────────────────────────────────
+# ── Gemini client ──────────────────────────────────────────────────────────────
 gemini_client = GeminiClient(api_key=config.gemini_api_key)
 
-# ── ChromaDB PersistentClient ─────────────────────────────────────────────
-# FIXED: was chromadb.Client() (ephemeral). Now uses PersistentClient so
-# the collection is retained across restarts.
-_chroma_client = chromadb.PersistentClient(path=str(config.chroma_db_path))
-collection = _chroma_client.get_or_create_collection(
-    name="credit_features",
-    embedding_function=embedder,
+# ── SQL template for cosine-distance retrieval ─────────────────────────────────
+# Parameters:
+#   :query_vec   — 384-float list cast to ::vector by pgvector
+#   :categories  — list of allowed category strings (ANY operator)
+#   :threshold   — minimum 1 - cosine_distance similarity score
+#   :top_k       — maximum number of results to return
+_RETRIEVAL_SQL = text(
+    """
+    SELECT
+        id,
+        content,
+        1 - (embedding <=> CAST(:query_vec AS vector)) AS similarity
+    FROM rag_documents
+    WHERE category = ANY(:categories)
+      AND 1 - (embedding <=> CAST(:query_vec AS vector)) > :threshold
+    ORDER BY embedding <=> CAST(:query_vec AS vector)
+    LIMIT :top_k
+    """
 )
 
+# Categories scoped for credit-scoring RAG retrieval
+_RAG_CATEGORIES: list[str] = ["feature_definition", "policy_rule"]
 
-def retrieve_docs(query: str, k: int | None = None) -> list[str]:
-    """Retrieve top-k similar feature definition documents from ChromaDB.
+
+def retrieve_docs(
+    query: str,
+    k: int | None = None,
+    prediction: str | None = None,
+    model_name: str | None = None,
+    job_id: str | None = None,
+) -> list[tuple[int, str, float]]:
+    """Retrieve top-k similar knowledge documents from the pgvector store.
+
+    Encodes the query with the sentence-transformer model, executes a
+    parameterised cosine-distance SQL query against ``rag_documents``, and
+    writes an audit row to ``rag_audit_log`` regardless of whether results
+    were found.
 
     Args:
-        query: Natural language query string (typically the prediction + SHAP dict).
-        k: Number of documents to retrieve. Defaults to ``config.hyperparams``
-           inference.rag_top_k (5).
+        query: Natural language query string (typically prediction + SHAP dict).
+        k: Maximum number of documents to return. Defaults to
+           ``config.hyperparams["inference"]["rag_top_k"]`` (5).
+        prediction: ML model prediction label for the audit log.
+        model_name: ML model name for the audit log.
+        job_id: UUID string of the associated inference job for the audit log.
 
     Returns:
-        list[str]: Retrieved document strings, or empty list if none found.
+        list[tuple[int, str, float]]: List of (doc_id, content, similarity_score)
+        tuples ordered by descending similarity. Empty list when no documents
+        exceed the configured similarity threshold.
+
+    Raises:
+        SQLAlchemyError: Re-raised after logging if the retrieval query fails.
+            Audit log write failures are logged at ERROR and also re-raised.
     """
+    hp = config.hyperparams.get("inference", {})
     if k is None:
-        k = config.hyperparams.get("inference", {}).get("rag_top_k", 5)
+        k = int(hp.get("rag_top_k", 5))
+    threshold = float(hp.get("rag_similarity_threshold", 0.75))
 
-    results = collection.query(query_texts=[query], n_results=k)
-    documents = results.get("documents", [[]])[0]
+    # Encode the query → 384-float list
+    query_vec: list[float] = _embedder.encode(query).tolist()
 
-    if not documents:
-        logger.warning("No RAG documents found for query: %.80s...", query)
-        return []
+    t_start = time.perf_counter()
+    results: list[tuple[int, str, float]] = []
 
-    return [str(doc) for doc in documents]
+    engine = db_engine()
+    try:
+        with Session(engine) as session:
+            rows = session.execute(
+                _RETRIEVAL_SQL,
+                {
+                    "query_vec": str(query_vec),
+                    "categories": _RAG_CATEGORIES,
+                    "threshold": threshold,
+                    "top_k": k,
+                },
+            ).fetchall()
+            results = [(row.id, row.content, float(row.similarity)) for row in rows]
+    except SQLAlchemyError:
+        logger.error("pgvector retrieval query failed for query: %.80s", query, exc_info=True)
+        raise
+
+    elapsed_ms = int((time.perf_counter() - t_start) * 1000)
+    logger.debug("RAG retrieval latency: %d ms, %d docs returned", elapsed_ms, len(results))
+
+    if not results:
+        logger.warning("No RAG documents found above threshold %.2f for query: %.80s", threshold, query)
+
+    # ── Audit log write ────────────────────────────────────────────────────────
+    retrieved_ids = [r[0] for r in results]
+    try:
+        with Session(engine) as audit_session:
+            audit_row = RagAuditLogDB(
+                query_text=query,
+                retrieved_ids=retrieved_ids,
+                prediction=prediction,
+                model_name=model_name,
+                latency_ms=elapsed_ms,
+            )
+            audit_session.add(audit_row)
+            audit_session.commit()
+    except SQLAlchemyError:
+        logger.error("Failed to write RAG audit log row", exc_info=True)
+        raise
+
+    return results
 
 
 @retry(
@@ -76,7 +161,7 @@ def retrieve_docs(query: str, k: int | None = None) -> list[str]:
 def _call_gemini(prompt: str) -> str:
     """Call the Gemini API and extract the generated text.
 
-    Retried up to 3 times with exponential backoff (2–10 s) on any exception.
+    Retried up to 3 times with exponential backoff (2-10 s) on any exception.
     If all attempts fail the original exception is re-raised (``reraise=True``).
 
     Args:
@@ -102,19 +187,28 @@ def _call_gemini(prompt: str) -> str:
     wait=wait_exponential(multiplier=1, min=2, max=10),
     reraise=True,
 )
-def get_rag_explanation(prediction: str, shap_dict: dict) -> str:
+def get_rag_explanation(
+    prediction: str,
+    shap_dict: dict,
+    model_name: str | None = None,
+    job_id: str | None = None,
+) -> str:
     """Generate a natural language explanation for a credit scoring prediction.
 
-    Retrieves relevant feature definitions from ChromaDB and uses Gemini
-    to generate a paragraph-level explanation of the model's decision.
+    Retrieves relevant feature definitions from the pgvector store and uses
+    Gemini to generate a paragraph-level explanation of the model's decision.
 
-    Retried up to 3 times with exponential backoff (2–10 s) on any exception.
+    Retried up to 3 times with exponential backoff (2-10 s) on any exception.
     On persistent failure the exception is re-raised to the Celery task error
     boundary, which marks the job as ``failed``.
 
     Args:
         prediction: Predicted class name (e.g. ``"Eligible"``).
         shap_dict: Dict of ``{feature_name: shap_value}`` for the top features.
+        model_name: Name of the ML model producing the prediction. Forwarded
+            to the audit log for traceability.
+        job_id: UUID string of the associated inference job. Forwarded to the
+            audit log to link retrieval events to inference job rows.
 
     Returns:
         str: Generated explanation text.
@@ -122,8 +216,17 @@ def get_rag_explanation(prediction: str, shap_dict: dict) -> str:
     shap_json = json.dumps(shap_dict, indent=2)
     query_text = f"Model predicted: {prediction}\nSHAP contributions: {shap_json}"
 
-    retrieved_docs = retrieve_docs(query_text)
-    context = "\n".join(retrieved_docs) if retrieved_docs else "No relevant feature definitions found."
+    retrieved_docs = retrieve_docs(
+        query=query_text,
+        prediction=prediction,
+        model_name=model_name,
+        job_id=job_id,
+    )
+    context = (
+        "\n".join(doc for _, doc, _ in retrieved_docs)
+        if retrieved_docs
+        else "No relevant feature definitions found."
+    )
 
     prompt_path = Path(config.prompt_path)
     if not prompt_path.exists():
@@ -160,4 +263,5 @@ RESPONSE:
 Generate the paragraphs now.
 """
 
-    return _call_gemini(prompt)
+    explanation = _call_gemini(prompt)
+    return explanation

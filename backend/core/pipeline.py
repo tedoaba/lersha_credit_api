@@ -126,7 +126,9 @@ def run_inferences(
 
             # RAG explanation — FIXED: was a literal placeholder string "rag_explanation"
             try:
-                rag_explanation = get_rag_explanation(prediction_class_name, shap_dict)
+                rag_explanation = get_rag_explanation(
+                    prediction_class_name, shap_dict, model_name=model_name
+                )
             except Exception as rag_exc:
                 logger.warning("RAG explanation failed for record %d: %s", idx, rag_exc)
                 rag_explanation = "[RAG unavailable]"
