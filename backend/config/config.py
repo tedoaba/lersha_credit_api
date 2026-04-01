@@ -131,10 +131,7 @@ class Config:
         self.candidate_result = os.getenv("CANDIDATE_RESULT", "candidate_result")
         self.farmer_data_all = os.getenv("FARMER_DATA_ALL")
 
-        # ── ChromaDB ───────────────────────────────────────────────────────
-        self.chroma_db_path = os.getenv("CHROMA_DB_PATH", str(BASE_DIR / "chroma_db"))
-
-        # ── LLM / Embeddings ───────────────────────────────────────────────
+        # ── LLM / Embeddings ───────────────────────────────────────────────────
         self.prompt_path = os.getenv("PROMPT_PATH", str(BASE_DIR / "backend" / "prompts" / "prompts.yaml"))
         self.gemini_model_id = os.getenv("GEMINI_MODEL")
         self.embedder_model = os.getenv("EMBEDDER_MODEL", "all-MiniLM-L6-v2")

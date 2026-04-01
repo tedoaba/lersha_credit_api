@@ -3,6 +3,7 @@ inference:
   max_batch_size: 100
   shap_max_samples: 100
   rag_top_k: 5
+  rag_similarity_threshold: 0.75
   job_timeout_minutes: 30
 
 models:
