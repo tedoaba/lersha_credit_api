@@ -48,7 +48,7 @@ from slowapi.errors import RateLimitExceeded
 
 from backend.api.dependencies import limiter
 from backend.api.middleware import RequestIDMiddleware
-from backend.api.routers import health, predict, results
+from backend.api.routers import explain, health, predict, results
 from backend.logger.logger import get_logger
 
 logger = get_logger(__name__)
@@ -106,6 +106,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)  # GET /, GET /health
     app.include_router(predict.router, prefix="/v1/predict", tags=["v1 — Inference"])
     app.include_router(results.router, prefix="/v1/results", tags=["v1 — Results"])
+    app.include_router(explain.router, prefix="/v1/explain", tags=["v1 — Explain"])
 
     return app
 
