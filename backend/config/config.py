@@ -130,10 +130,20 @@ class Config:
         self.candidate_result = os.getenv("CANDIDATE_RESULT", "candidate_result")
         self.farmer_data_all = os.getenv("FARMER_DATA_ALL")
 
-        # ── LLM / Embeddings ───────────────────────────────────────────────────
+        # ── LLM / Embeddings ───────────────────────────────────────────────────────
+        # Legacy path: used by rag_engine.get_rag_explanation() only.
+        # New code should use prompt_version + prompt_dir via RagService.
         self.prompt_path = os.getenv("PROMPT_PATH", str(BASE_DIR / "backend" / "prompts" / "prompts.yaml"))
         self.gemini_model_id = os.getenv("GEMINI_MODEL")
         self.embedder_model = os.getenv("EMBEDDER_MODEL", "all-MiniLM-L6-v2")
+
+        # ── RAG Prompt Versioning ──────────────────────────────────────────────
+        # PROMPT_VERSION selects which vN.yaml file is loaded from prompt_dir.
+        # Default: "v1" (backend/prompts/v1.yaml).
+        # To switch versions without a code change, set PROMPT_VERSION=v2 and
+        # ensure backend/prompts/v2.yaml exists before restarting.
+        self.prompt_version: str = os.getenv("PROMPT_VERSION", "v1")
+        self.prompt_dir: Path = BASE_DIR / "backend" / "prompts"
 
         # ── Output / SHAP ──────────────────────────────────────────────────
         self.shap_path = os.getenv("SHAP_PATH", str(BASE_DIR / "output" / "shap_summary"))
