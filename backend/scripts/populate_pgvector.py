@@ -201,7 +201,7 @@ def populate_pgvector(batch_size: int = BATCH_SIZE) -> int:
                     "title": feature_name.replace("_", " ").title(),
                     "content": content,
                     "embedding": embedding,
-                    "doc_metadata": {"feature_name": feature_name},
+                    "metadata": {"feature_name": feature_name},
                     "created_at": now,
                     "updated_at": now,
                 }
@@ -209,13 +209,13 @@ def populate_pgvector(batch_size: int = BATCH_SIZE) -> int:
 
         try:
             with Session(engine) as session:
-                stmt = pg_insert(RagDocumentDB).values(rows)
+                stmt = pg_insert(RagDocumentDB.__table__).values(rows)
                 upsert_stmt = stmt.on_conflict_do_update(
                     index_elements=["doc_id"],
                     set_={
                         "content": stmt.excluded.content,
                         "embedding": stmt.excluded.embedding,
-                        "doc_metadata": stmt.excluded.doc_metadata,
+                        "metadata": stmt.excluded["metadata"],
                         "updated_at": stmt.excluded.updated_at,
                     },
                 )

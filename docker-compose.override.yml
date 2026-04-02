@@ -9,10 +9,10 @@
 # Do NOT use this file in production.
 
 services:
-  # ── PostgreSQL (expose port for local DB tools) ────────────────────────────
+  # ── PostgreSQL (expose on 5433 to avoid conflict with local PG18 on 5432) ──
   postgres:
     ports:
-      - "5432:5432"
+      - "5433:5432"
 
   # ── Redis (expose port for local inspection) ───────────────────────────────
   redis:
