@@ -1,6 +1,6 @@
 ﻿# lersha_credit_api Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-04-01
+Auto-generated from all feature plans. Last updated: 2026-04-02
 
 ## Active Technologies
 - Python 3.12 + FastAPI 0.115+, Pydantic v2, SQLAlchemy 2.x, Streamlit ~1.40, requests, PyYAML, python-dotenv (002-fastapi-backend-http-wire)
@@ -11,6 +11,8 @@ Auto-generated from all feature plans. Last updated: 2026-04-01
 - PostgreSQL 16 (app + MLflow tracking), S3/GCS (MLflow artifacts), `./backups/` (pg_dump) (005-infra-prod-hardening)
 - Python 3.12 (`python:3.12-slim` base image per `[P11-CONT]`) + FastAPI, SQLAlchemy 2.x, Alembic, `pgvector>=0.3.0`, `sentence-transformers>=2.7.0`, Celery, tenacity (006-migrate-chroma-pgvector)
 - PostgreSQL 16 via `pgvector/pgvector:pg16` Docker image + `pgvector.sqlalchemy.Vector` ORM column (006-migrate-chroma-pgvector)
+- [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION] + [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION] (007-rag-service-hardening)
+- [if applicable, e.g., PostgreSQL, CoreData, files or N/A] (007-rag-service-hardening)
 
 - Python 3.12 + FastAPI 0.121, SQLAlchemy 2.x, pandas 2.x, XGBoost 3.x, scikit-learn 1.7, CatBoost 1.2, SHAP 0.50, MLflow 3.6, chromadb, sentence-transformers, google-generativeai, Streamlit (UI), uvicorn, pydantic v2 (001-monorepo-refactor)
 
@@ -31,9 +33,9 @@ cd src; pytest; ruff check .
 Python 3.12: Follow standard conventions
 
 ## Recent Changes
+- 007-rag-service-hardening: Added [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION] + [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
 - 006-migrate-chroma-pgvector: Added Python 3.12 (`python:3.12-slim` base image per `[P11-CONT]`) + FastAPI, SQLAlchemy 2.x, Alembic, `pgvector>=0.3.0`, `sentence-transformers>=2.7.0`, Celery, tenacity
 - 005-infra-prod-hardening: Added Python 3.12 (backend), YAML (compose/CI), Caddyfile DSL + Docker Compose v2, Caddy 2, Gunicorn, Uvicorn, MLflow, Celery, Redis, postgres-backup-local
-- 004-harden-app-security: Added Python 3.12 + FastAPI 0.121, SQLAlchemy 2.x, Alembic ≥1.13, Celery ≥5.3, Redis ≥5.0, python-json-logger ≥2.0, slowapi ≥0.1.9, gunicorn ≥21.2, tenacity ≥8.2, starlette BaseHTTPMiddleware, pre-commit ≥3.7, mypy ≥1.9
 
 
 <!-- MANUAL ADDITIONS START -->
