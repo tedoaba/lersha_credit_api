@@ -91,7 +91,6 @@ class Config:
             "total_estimated_income",
             "total_estimated_cost",
             "net_income",
-            "decision",
         ]
 
         # ── Model file paths ───────────────────────────────────────────────
