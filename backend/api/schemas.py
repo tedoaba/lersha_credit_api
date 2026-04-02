@@ -3,6 +3,10 @@
 All API request and response models are defined here. Field names use
 ``result_xgboost`` and ``result_random_forest`` exclusively — the legacy
 fields ``result_18``, ``result_44``, and ``result_featured`` must never appear.
+
+Explain endpoint models (added in feature 007-rag-service-hardening):
+  - ExplainRequest:  POST /v1/explain request body.
+  - ExplainResponse: POST /v1/explain response body.
 """
 
 from __future__ import annotations
@@ -10,7 +14,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class FeatureContribution(BaseModel):
@@ -89,3 +93,55 @@ class ResultsResponse(BaseModel):
 
     total: int
     records: list[ResultsRecord]
+
+
+# ── Explain endpoint ───────────────────────────────────────────────────────────
+
+
+class ExplainRequest(BaseModel):
+    """Request body for POST /v1/explain.
+
+    Attributes:
+        job_id: UUID string of a completed inference job whose records
+            hold the prediction outcome and SHAP values.
+        record_index: Zero-based index of the farmer record within the job's
+            evaluation list.  Must be non-negative.
+        model_name: Name of the ML model used for scoring
+            (e.g. ``"xgboost"``, ``"random_forest"``).
+    """
+
+    job_id: str = Field(..., description="UUID of the completed inference job")
+    record_index: int = Field(..., ge=0, description="0-based index of the farmer record in the job")
+    model_name: str = Field(..., min_length=1, description="ML model name, e.g. 'xgboost'")
+
+    @field_validator("job_id")
+    @classmethod
+    def validate_job_id_format(cls, v: str) -> str:
+        """Validate that job_id is a non-empty string (UUID format recommended)."""
+        if not v or not v.strip():
+            raise ValueError("job_id must be a non-empty string")
+        return v.strip()
+
+
+class ExplainResponse(BaseModel):
+    """Response body for POST /v1/explain.
+
+    Attributes:
+        farmer_uid: Unique farmer identifier from the prediction record.
+        prediction: Predicted class label (e.g. ``"Eligible"``).
+        explanation: AI-generated natural-language explanation (2–3 sentences).
+        retrieved_doc_ids: Ordered list of rag_documents.id values that formed
+            the retrieval context for this explanation.
+        cache_hit: ``True`` when the explanation was served from the Redis cache
+            without invoking the AI generation service.
+        prompt_version: Version of the prompt template used (e.g. ``"v1"``).
+        latency_ms: End-to-end latency from request receipt to response in ms.
+    """
+
+    farmer_uid: str
+    prediction: str
+    explanation: str
+    retrieved_doc_ids: list[int]
+    cache_hit: bool
+    prompt_version: str
+    latency_ms: int
