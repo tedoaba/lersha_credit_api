@@ -5,14 +5,14 @@ Extended in 006-migrate-chroma-pgvector (2026-04-01):
   - RagAuditLogDB: immutable retrieval audit trail for compliance.
 """
 
-from sqlalchemy import TIMESTAMP, Column, Integer, String, Text
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import JSON as SA_JSON
+from sqlalchemy import TIMESTAMP, Boolean, Column, Integer, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import declarative_base
 
 from backend.config.config import config
-from pgvector.sqlalchemy import Vector
 
 Base = declarative_base()
 
@@ -86,8 +86,8 @@ class RagAuditLogDB(Base):
     """ORM model for the rag_audit_log table.
 
     Records every RAG retrieval event for compliance auditing and
-    performance diagnostics. Written by rag_engine.retrieve_docs() after
-    each successful or empty retrieval. Never updated — append-only.
+    performance diagnostics. Written by RagService after each retrieval
+    or explanation generation (cache hit or miss). Never updated — append-only.
 
     Attributes:
         id: Auto-incrementing surrogate primary key.
@@ -96,9 +96,11 @@ class RagAuditLogDB(Base):
         prediction: ML model prediction label (e.g. 'Eligible').
         model_name: Name of the ML model that produced the prediction.
         job_id: UUID linking this audit record to an inference_jobs row.
-        generated_text: Gemini-generated explanation text (set post-generation).
-        latency_ms: End-to-end retrieval latency in milliseconds.
-        created_at: UTC timestamp of the retrieval event.
+        generated_text: Gemini-generated explanation text (null on retrieval-only events).
+        latency_ms: End-to-end latency in milliseconds.
+        cache_hit: True when the explanation was served from Redis cache.
+        prompt_version: Active prompt version used (e.g. 'v1'). Null on retrieval-only events.
+        created_at: UTC timestamp of the event.
     """
 
     __tablename__ = "rag_audit_log"
@@ -111,4 +113,6 @@ class RagAuditLogDB(Base):
     job_id: Column = Column(PG_UUID(as_uuid=True), nullable=True)
     generated_text: Column = Column(Text, nullable=True)
     latency_ms: Column = Column(Integer, nullable=True)
+    cache_hit: Column = Column(Boolean, nullable=False, default=False)
+    prompt_version: Column = Column(String(20), nullable=True)
     created_at: Column = Column(TIMESTAMP(timezone=True), nullable=True)
