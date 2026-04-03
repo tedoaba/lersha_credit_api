@@ -20,7 +20,27 @@
 #
 # HTTP → HTTPS redirect is automatic (Caddy default behaviour).
 
+# Lersha Credit Scoring System — Caddy Reverse Proxy Configuration
+#
+# OPERATOR SETUP:
+#   1. Replace "your-domain.com" below with your actual domain name.
+#   2. Ensure your domain's DNS A record points to this server's public IP.
+#   3. Caddy will automatically obtain and renew a Let's Encrypt TLS certificate.
+#
+# LOCAL TESTING (no public domain):
+#   Add `tls internal` inside the site block to use a self-signed certificate.
+#
+# ROUTING (priority order — most specific first):
+#   /v1/* → FastAPI backend (port 8000) — versioned API routes
+#   /*    → Next.js frontend (port 3000) — all other paths
+#
+# HTTP → HTTPS redirect is automatic (Caddy default behaviour).
+
 your-domain.com {
+    # API routes — must be declared first (higher priority)
     reverse_proxy /v1/* backend:8000
-    reverse_proxy /* ui:8501
+
+    # Next.js frontend — all remaining paths
+    reverse_proxy /* frontend:3000
 }
+

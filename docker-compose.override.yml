@@ -44,3 +44,12 @@ services:
       --default-artifact-root /mlruns
     ports:
       - "5000:5000"
+
+  # ── Next.js Frontend (dev — exposed for direct browser access) ─────────────
+  frontend:
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next

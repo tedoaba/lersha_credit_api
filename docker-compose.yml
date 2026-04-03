@@ -90,7 +90,7 @@ services:
       - ./output:/app/output
       - ./logs:/app/logs
 
-  # ── Streamlit UI ───────────────────────────────────────────────────────────
+  # ── Streamlit UI (legacy — kept during migration) ────────────────────────
   ui:
     build:
       context: .
@@ -102,6 +102,20 @@ services:
       - .env
     environment:
       API_BASE_URL: http://backend:8000
+
+  # ── Next.js Frontend ───────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      # Server-side only — NOT exposed to browser (no NEXT_PUBLIC_ prefix)
+      API_BASE_URL: http://backend:8000
+      API_KEY: ${API_KEY}
 
   # ── MLflow Tracking Server ─────────────────────────────────────────────────
   # Dev uses SQLite (overridden in docker-compose.override.yml).

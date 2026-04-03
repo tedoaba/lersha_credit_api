@@ -1,7 +1,7 @@
 # Lersha Credit Scoring System — Makefile
 # Usage: make <target>
 
-.PHONY: help install setup-db migrate db-stamp setup-rag lint format check-format ci-quality typecheck pre-commit test coverage dev api ui mlflow docker-build docker-up docker-down restore-db clean
+.PHONY: help install setup-db migrate db-stamp setup-rag lint format check-format ci-quality typecheck pre-commit test coverage dev dev-next api ui mlflow docker-build docker-up docker-down restore-db clean frontend-dev frontend-build frontend-up
 
 # Default target
 help:
@@ -17,10 +17,14 @@ help:
 	@echo "  make setup-rag      Populate rag_documents table (pgvector knowledge base)"
 	@echo ""
 	@echo "Development:"
-	@echo "  make dev           Start API (new window) + UI (current terminal)"
+	@echo "  make dev           Start API + Streamlit UI (legacy)"
+	@echo "  make dev-next      Start API + Next.js frontend together (recommended)"
 	@echo "  make api           Start the FastAPI backend on port 8000 (hot reload)"
 	@echo "  make ui            Start the Streamlit UI on port 8501"
 	@echo "  make mlflow        Start the MLflow tracking server on port 5000"
+	@echo "  make frontend-dev  Start the Next.js frontend only on port 3000"
+	@echo "  make frontend-build Build the Next.js frontend for production"
+	@echo "  make frontend-up   Start the Next.js frontend Docker service"
 	@echo ""
 	@echo "Quality:"
 	@echo "  make lint          Run ruff linter on backend/ and ui/"
@@ -80,6 +84,28 @@ ui:
 
 mlflow:
 	uv run mlflow ui --backend-store-uri mlruns --port 5000
+
+# Starts FastAPI backend + Next.js frontend concurrently.
+# API runs in the background; Ctrl-C stops both.
+# Frontend is available at http://localhost:3000, API at http://localhost:8000
+dev-next: migrate
+	uv run uvicorn backend.main:app --reload --reload-dir backend --port 8000 --host 0.0.0.0 & \
+	API_PID=$$!; \
+	trap "kill $$API_PID 2>/dev/null; exit" INT TERM; \
+	echo "Waiting for API to be ready..."; \
+	until curl -sf http://localhost:8000/health > /dev/null 2>&1; do sleep 1; done; \
+	echo "API ready — starting Next.js frontend on http://localhost:3000 ..."; \
+	cd frontend && npm run dev; \
+	kill $$API_PID 2>/dev/null
+
+frontend-dev:
+	cd frontend && npm run dev
+
+frontend-build:
+	cd frontend && npm run build
+
+frontend-up:
+	docker compose up frontend
 
 # ── Quality ────────────────────────────────────────────────────────────────────
 
