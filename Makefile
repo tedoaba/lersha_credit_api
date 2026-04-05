@@ -1,7 +1,7 @@
 # Lersha Credit Scoring System — Makefile
 # Usage: make <target>
 
-.PHONY: help install setup-db migrate db-stamp setup-rag lint format check-format ci-quality typecheck pre-commit test coverage dev dev-next api ui mlflow docker-build docker-up docker-down restore-db clean frontend-dev frontend-build frontend-up
+.PHONY: help install setup-db migrate db-stamp setup-rag lint format check-format ci-quality typecheck pre-commit test coverage dev dev-next api ui mlflow docker-build docker-up docker-down docker-prod-up docker-prod-down restore-db clean frontend-dev frontend-build frontend-up cli-health cli-predict cli-results
 
 # Default target
 help:
@@ -14,7 +14,7 @@ help:
 	@echo "  make setup-db      Initialise PostgreSQL schema and load CSV data"
 	@echo "  make migrate       Apply pending Alembic migrations (upgrade head)"
 	@echo "  make db-stamp      Stamp DB at current head (use after manual schema creation)"
-	@echo "  make setup-rag      Populate rag_documents table (pgvector knowledge base)"
+	@echo "  make setup-rag     Populate rag_documents table (pgvector knowledge base)"
 	@echo ""
 	@echo "Development:"
 	@echo "  make dev           Start API + Streamlit UI (legacy)"
@@ -25,6 +25,11 @@ help:
 	@echo "  make frontend-dev  Start the Next.js frontend only on port 3000"
 	@echo "  make frontend-build Build the Next.js frontend for production"
 	@echo "  make frontend-up   Start the Next.js frontend Docker service"
+	@echo ""
+	@echo "CLI (thin wrappers — calls API, no direct backend imports):"
+	@echo "  make cli-health    Check backend health via API"
+	@echo "  make cli-predict   Submit a batch prediction (default 5 rows)"
+	@echo "  make cli-results   Fetch evaluation results"
 	@echo ""
 	@echo "Quality:"
 	@echo "  make lint          Run ruff linter on backend/ and ui/"
@@ -37,12 +42,14 @@ help:
 	@echo "  make coverage      Run tests with HTML coverage report"
 	@echo ""
 	@echo "Docker:"
-	@echo "  make docker-build  Build backend and ui Docker images"
-	@echo "  make docker-up     Start the full Docker Compose stack (dev)"
-	@echo "  make docker-down   Stop the Docker Compose stack"
-	@echo "  make restore-db    Restore PostgreSQL from backup (BACKUP_FILE=path required)"
+	@echo "  make docker-build     Build backend, ui, and frontend Docker images"
+	@echo "  make docker-up        Start the full Docker Compose stack (dev)"
+	@echo "  make docker-down      Stop the Docker Compose stack"
+	@echo "  make docker-prod-up   Start the production stack (Caddy, Gunicorn, backup)"
+	@echo "  make docker-prod-down Stop the production stack"
+	@echo "  make restore-db       Restore PostgreSQL from backup (BACKUP_FILE=path required)"
 	@echo ""
-	@echo "  make clean         Remove __pycache__, .coverage, htmlcov/"
+	@echo "  make clean            Remove __pycache__, .coverage, htmlcov/"
 
 # ── Setup ──────────────────────────────────────────────────────────────────────
 
@@ -107,6 +114,17 @@ frontend-build:
 frontend-up:
 	docker compose up frontend
 
+# ── CLI (thin wrappers — calls API via HTTP) ──────────────────────────────────
+
+cli-health:
+	uv run python -m backend.cli.health
+
+cli-predict:
+	uv run python -m backend.cli.predict --source "Batch Prediction" --rows 5 --wait
+
+cli-results:
+	uv run python -m backend.cli.results --limit 20
+
 # ── Quality ────────────────────────────────────────────────────────────────────
 
 lint:
@@ -136,15 +154,20 @@ coverage:
 # ── Docker ─────────────────────────────────────────────────────────────────────
 
 docker-build:
-	@echo "NOTE: For production, use:  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d"
-	docker build -f backend/Dockerfile -t lersha-backend:latest .
-	docker build -f ui/Dockerfile -t lersha-ui:latest .
+	@echo "Building all Docker images..."
+	docker compose build backend worker ui frontend
 
 docker-up:
 	docker compose up -d
 
 docker-down:
 	docker compose down
+
+docker-prod-up:
+	docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+docker-prod-down:
+	docker compose -f docker-compose.yml -f docker-compose.prod.yml down
 
 restore-db:
 	@if [ -z "$(BACKUP_FILE)" ]; then \
