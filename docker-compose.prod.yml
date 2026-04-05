@@ -92,12 +92,6 @@ services:
       API_KEY: ${API_KEY}
       NODE_ENV: production
 
-  # ── Streamlit UI (legacy — accessible via Caddy if needed) ─────────────────
-  ui:
-    environment:
-      API_BASE_URL: http://backend:8000
-      API_KEY: ${API_KEY}
-
   # ── MLflow Tracking Server (PostgreSQL backend + S3 artifacts) ─────────────
   #
   # BEFORE FIRST STARTUP: Create the mlflow database in PostgreSQL:

@@ -176,20 +176,20 @@ re-running it updates existing rows without creating duplicates.
 make dev
 ```
 
-This opens the **API in a new terminal window** and starts the **UI in the current terminal** — both run concurrently with a single command.
+This starts the **API** and **Next.js frontend** concurrently with a single command.
 
 | Service | URL |
 |---|---|
 | FastAPI backend | http://localhost:8000 |
 | Swagger / OpenAPI docs | http://localhost:8000/docs |
-| Streamlit UI | http://localhost:8501 |
+| Next.js frontend | http://localhost:3000 |
 
-To stop: press `Ctrl-C` in the current terminal (stops the UI), then close the API window.
+To stop: press `Ctrl-C` (stops both).
 
 > You can also start them individually:
 > ```bash
-> make api   # backend only — port 8000
-> make ui    # UI only — port 8501
+> make api          # backend only — port 8000
+> make frontend-dev # frontend only — port 3000
 > ```
 
 ---
@@ -217,7 +217,7 @@ required variables are missing.
 | `REDIS_URL` | `redis://localhost:6379/0` | Celery broker (production only) |
 | `CELERY_TASK_ALWAYS_EAGER` | `false` | `true` = run inference in-process (local dev, no Redis needed) |
 | `EMBEDDER_MODEL` | `all-MiniLM-L6-v2` | Sentence-Transformers embedding model (used by pgvector RAG) |
-| `API_BASE_URL` | `http://localhost:8000` | Backend URL used by the Streamlit UI |
+| `API_BASE_URL` | `http://localhost:8000` | Backend URL used by CLI and Next.js frontend (server-side) |
 | `MLFLOW_TRACKING_URI` | `mlruns/` | MLflow backend store URI |
 
 > **Note**: `rag_top_k` and `rag_similarity_threshold` are tuned in
@@ -322,14 +322,14 @@ make migrate        # Apply Alembic migrations (includes pgvector extension + RA
 uv run python -m backend.scripts.populate_pgvector  # Populate rag_documents table
 
 # ── Development ────────────────────────────────────────────────
-make dev            # Start API (new window) + UI (current terminal)
+make dev            # Start API + Next.js frontend together
 make api            # Start FastAPI backend on :8000 (hot reload)
-make ui             # Start Streamlit UI on :8501
+make frontend-dev   # Start Next.js frontend on :3000
 make mlflow         # Start MLflow UI on :5000
 
 # ── Quality ────────────────────────────────────────────────────
-make lint           # ruff check backend/ ui/
-make format         # ruff format backend/ ui/ (auto-fix)
+make lint           # ruff check backend/
+make format         # ruff format backend/ (auto-fix)
 make check-format   # ruff format --check (CI mode, no changes)
 make ci-quality     # lint + check-format (CI gate)
 make typecheck      # mypy backend/
@@ -338,7 +338,7 @@ make test           # pytest backend/tests/ -v
 make coverage       # pytest with HTML coverage report (htmlcov/)
 
 # ── Docker ─────────────────────────────────────────────────────
-make docker-build   # Build backend and ui Docker images
+make docker-build   # Build backend and frontend Docker images
 make docker-up      # Start full Docker Compose stack (dev)
 make docker-down    # Stop Docker Compose stack
 make restore-db     # Restore PostgreSQL from backup
@@ -364,7 +364,7 @@ Services started:
 |---|---|---|
 | `postgres` | 5432 | PostgreSQL 16 with persistent volume |
 | `backend` | 8000 | FastAPI + Gunicorn (4 UvicornWorkers) |
-| `ui` | 8501 | Streamlit UI |
+| `frontend` | 3000 | Next.js frontend |
 | `redis` | 6379 | Celery broker and result backend |
 | `mlflow` | 5000 | MLflow experiment tracking |
 
@@ -375,7 +375,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
 Production additions:
-- **Caddy** terminates TLS and reverse-proxies to backend/UI
+- **Caddy** terminates TLS and reverse-proxies to backend/frontend
 - **Docker Secrets** mount `API_KEY` and `GEMINI_API_KEY` as files at
   `/run/secrets/` instead of env vars
 - **PostgreSQL backup** service runs nightly `pg_dump` to `backups/`
@@ -446,7 +446,7 @@ All Gemini API calls are mocked in tests via `pytest-mock` to avoid real API usa
 |---|---|
 | [uv](https://docs.astral.sh/uv/) | Package and virtual-environment manager |
 | [FastAPI](https://fastapi.tiangolo.com/) | REST API framework |
-| [Streamlit](https://streamlit.io/) | Web UI framework |
+| [Next.js](https://nextjs.org/) | React frontend framework |
 | [SQLAlchemy 2](https://docs.sqlalchemy.org/) | ORM and connection pooling |
 | [Alembic](https://alembic.sqlalchemy.org/) | Database schema migrations |
 | [Celery](https://docs.celeryq.dev/) | Distributed task queue (production async inference) |

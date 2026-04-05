@@ -72,15 +72,6 @@ services:
       - ./output:/app/output
       - ./logs:/app/logs
 
-  # ── Streamlit UI (legacy — kept during migration) ────────────────────────
-  ui:
-    build:
-      context: .
-      dockerfile: ui/Dockerfile
-    restart: unless-stopped
-    depends_on:
-      - backend
-
   # ── Next.js Frontend ───────────────────────────────────────────────────────
   frontend:
     build:

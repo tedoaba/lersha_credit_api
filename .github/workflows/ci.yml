@@ -27,10 +27,10 @@ jobs:
         run: uv sync --extra dev
 
       - name: Ruff — lint check
-        run: uv run ruff check backend/ ui/
+        run: uv run ruff check backend/
 
       - name: Ruff — format check (no changes applied)
-        run: uv run ruff format --check backend/ ui/
+        run: uv run ruff format --check backend/
 
       - name: Mypy — static type checking (backend only)
         run: uv run mypy backend/
@@ -140,9 +140,6 @@ jobs:
 
       - name: Build backend image
         run: docker build -f backend/Dockerfile -t lersha-backend:ci .
-
-      - name: Build UI image
-        run: docker build -f ui/Dockerfile -t lersha-ui:ci .
 
       - name: Build frontend image
         run: docker build -f frontend/Dockerfile -t lersha-frontend:ci .

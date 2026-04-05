@@ -40,7 +40,6 @@ services:
     volumes:
       # Bind mounts enable hot reload — code changes are reflected instantly
       - ./backend:/app/backend
-      - ./ui:/app/ui
 
   # ── Celery Worker (eager mode — not strictly needed but kept for parity) ──
   worker:
@@ -51,15 +50,6 @@ services:
       DB_URI: postgresql://${POSTGRES_USER:-lersha}:${POSTGRES_PASSWORD:-lersha}@postgres:5432/${POSTGRES_DB:-lersha}
       MLFLOW_TRACKING_URI: http://mlflow:5000
       REDIS_URL: redis://redis:6379/0
-
-  # ── Streamlit UI ───────────────────────────────────────────────────────────
-  ui:
-    env_file:
-      - .env
-    environment:
-      API_BASE_URL: http://backend:8000
-    ports:
-      - "8501:8501"
 
   # ── Next.js Frontend (dev — exposed for direct browser access) ─────────────
   frontend:

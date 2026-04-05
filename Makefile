@@ -1,7 +1,7 @@
 # Lersha Credit Scoring System — Makefile
 # Usage: make <target>
 
-.PHONY: help install setup-db migrate db-stamp setup-rag lint format check-format ci-quality typecheck pre-commit test coverage dev dev-next api ui mlflow docker-build docker-up docker-down docker-prod-up docker-prod-down restore-db clean frontend-dev frontend-build frontend-up cli-health cli-predict cli-results
+.PHONY: help install setup-db migrate db-stamp setup-rag lint format check-format ci-quality typecheck pre-commit test coverage dev api mlflow docker-build docker-up docker-down docker-prod-up docker-prod-down restore-db clean frontend-dev frontend-build frontend-up cli-health cli-predict cli-results
 
 # Default target
 help:
@@ -17,10 +17,8 @@ help:
 	@echo "  make setup-rag     Populate rag_documents table (pgvector knowledge base)"
 	@echo ""
 	@echo "Development:"
-	@echo "  make dev           Start API + Streamlit UI (legacy)"
-	@echo "  make dev-next      Start API + Next.js frontend together (recommended)"
+	@echo "  make dev           Start API + Next.js frontend together"
 	@echo "  make api           Start the FastAPI backend on port 8000 (hot reload)"
-	@echo "  make ui            Start the Streamlit UI on port 8501"
 	@echo "  make mlflow        Start the MLflow tracking server on port 5000"
 	@echo "  make frontend-dev  Start the Next.js frontend only on port 3000"
 	@echo "  make frontend-build Build the Next.js frontend for production"
@@ -32,8 +30,8 @@ help:
 	@echo "  make cli-results   Fetch evaluation results"
 	@echo ""
 	@echo "Quality:"
-	@echo "  make lint          Run ruff linter on backend/ and ui/"
-	@echo "  make format        Auto-format backend/ and ui/ with ruff"
+	@echo "  make lint          Run ruff linter on backend/"
+	@echo "  make format        Auto-format backend/ with ruff"
 	@echo "  make check-format  Check formatting without applying changes"
 	@echo "  make ci-quality    Run lint + format check (CI quality gate)"
 	@echo "  make typecheck     Run mypy type checker on backend/"
@@ -42,7 +40,7 @@ help:
 	@echo "  make coverage      Run tests with HTML coverage report"
 	@echo ""
 	@echo "Docker:"
-	@echo "  make docker-build     Build backend, ui, and frontend Docker images"
+	@echo "  make docker-build     Build backend and frontend Docker images"
 	@echo "  make docker-up        Start the full Docker Compose stack (dev)"
 	@echo "  make docker-down      Stop the Docker Compose stack"
 	@echo "  make docker-prod-up   Start the production stack (Caddy, Gunicorn, backup)"
@@ -70,32 +68,10 @@ setup-rag:
 
 # ── Development ────────────────────────────────────────────────────────────────
 
-# Starts the API in a new terminal window and the UI in the current terminal.
-# Both processes run concurrently; Ctrl-C in the current terminal stops the UI.
-# Close the API window separately to stop the backend.
-dev: migrate
-	uv run uvicorn backend.main:app --reload --reload-dir backend --port 8000 --host 0.0.0.0 & \
-	API_PID=$$!; \
-	trap "kill $$API_PID 2>/dev/null; exit" INT TERM; \
-	echo "Waiting for API to be ready..."; \
-	until curl -sf http://localhost:8000/health > /dev/null 2>&1; do sleep 1; done; \
-	echo "API ready — starting UI..."; \
-	uv run streamlit run ui/Introduction.py --server.port 8501 --server.address 0.0.0.0; \
-	kill $$API_PID 2>/dev/null
-
-api:
-	uv run uvicorn backend.main:app --reload --reload-dir backend --port 8000 --host 0.0.0.0
-
-ui:
-	uv run streamlit run ui/Introduction.py --server.port 8501 --server.address 0.0.0.0
-
-mlflow:
-	uv run mlflow ui --backend-store-uri mlruns --port 5000
-
 # Starts FastAPI backend + Next.js frontend concurrently.
 # API runs in the background; Ctrl-C stops both.
 # Frontend is available at http://localhost:3000, API at http://localhost:8000
-dev-next: migrate
+dev: migrate
 	uv run uvicorn backend.main:app --reload --reload-dir backend --port 8000 --host 0.0.0.0 & \
 	API_PID=$$!; \
 	trap "kill $$API_PID 2>/dev/null; exit" INT TERM; \
@@ -104,6 +80,12 @@ dev-next: migrate
 	echo "API ready — starting Next.js frontend on http://localhost:3000 ..."; \
 	cd frontend && npm run dev; \
 	kill $$API_PID 2>/dev/null
+
+api:
+	uv run uvicorn backend.main:app --reload --reload-dir backend --port 8000 --host 0.0.0.0
+
+mlflow:
+	uv run mlflow ui --backend-store-uri mlruns --port 5000
 
 frontend-dev:
 	cd frontend && npm run dev
@@ -128,13 +110,13 @@ cli-results:
 # ── Quality ────────────────────────────────────────────────────────────────────
 
 lint:
-	uv run ruff check backend/ ui/
+	uv run ruff check backend/
 
 format:
-	uv run ruff format backend/ ui/
+	uv run ruff format backend/
 
 check-format:
-	uv run ruff format --check backend/ ui/
+	uv run ruff format --check backend/
 
 ci-quality: lint check-format
 
@@ -155,7 +137,7 @@ coverage:
 
 docker-build:
 	@echo "Building all Docker images..."
-	docker compose build backend worker ui frontend
+	docker compose build backend worker frontend
 
 docker-up:
 	docker compose up -d
