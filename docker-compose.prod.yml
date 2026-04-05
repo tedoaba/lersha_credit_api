@@ -3,13 +3,15 @@
 # Merge with base:  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 #
 # What this file adds / changes vs. the base:
-#   - caddy:   Reverse proxy with HTTPS (Let's Encrypt auto-cert)
-#   - backend: Gunicorn (4 workers) + runs alembic migrations on start
-#   - worker:  Docker secrets mounted
-#   - mlflow:  PostgreSQL backend + S3/GCS artifact store
-#   - backup:  Daily pg_dump with 30-day retention
-#   - Secrets: api_key + gemini_api_key injected as Docker secrets (never in env)
-#   - Volumes: caddy_data + caddy_config for TLS certificate cache
+#   - caddy:     TLS termination (/ → frontend:3000, /v1/* → backend:8000, /mlflow → mlflow:5000)
+#   - postgres:  env vars for production credentials
+#   - backend:   Gunicorn (4 workers) + Alembic migrations on start
+#   - worker:    Celery 4 concurrency, Docker secrets mounted
+#   - frontend:  Server-side API_KEY + API_BASE_URL
+#   - mlflow:    PostgreSQL backend + S3/GCS artifact store
+#   - backup:    Daily pg_dump with 30-day retention
+#   - Secrets:   api_key + gemini_api_key injected as Docker secrets (never in env)
+#   - Volumes:   caddy_data + caddy_config for TLS certificate cache
 #
 # OPERATOR CHECKLIST (before first deployment):
 #   1. Create secrets/api_key and secrets/gemini_api_key files (see secrets/README.md)
@@ -29,8 +31,10 @@ services:
     image: caddy:2-alpine
     restart: unless-stopped
     depends_on:
-      - backend
-      - ui
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
     ports:
       - "80:80"
       - "443:443"
@@ -39,6 +43,13 @@ services:
       - caddy_data:/data
       - caddy_config:/config
 
+  # ── PostgreSQL (production credentials) ────────────────────────────────────
+  postgres:
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lersha}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-lersha}
+
   # ── FastAPI Backend (Gunicorn + Alembic migrations) ────────────────────────
   backend:
     command: >
@@ -46,16 +57,46 @@ services:
              uv run gunicorn backend.main:app
              --workers 4
              --worker-class uvicorn.workers.UvicornWorker
-             --bind 0.0.0.0:8000"
+             --bind 0.0.0.0:8000
+             --timeout 120
+             --access-logfile -"
+    env_file:
+      - .env
+    environment:
+      DB_URI: postgresql://${POSTGRES_USER:-lersha}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-lersha}
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      REDIS_URL: redis://redis:6379/0
+      CELERY_TASK_ALWAYS_EAGER: "false"
     secrets:
       - api_key
       - gemini_api_key
 
-  # ── Celery Worker (shared secrets with backend) ────────────────────────────
+  # ── Celery Worker (ML pipeline + RAG tasks) ───────────────────────────────
   worker:
+    command: uv run celery -A backend.worker worker --loglevel=info --concurrency=4
+    env_file:
+      - .env
+    environment:
+      DB_URI: postgresql://${POSTGRES_USER:-lersha}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-lersha}
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      REDIS_URL: redis://redis:6379/0
+      CELERY_TASK_ALWAYS_EAGER: "false"
     secrets:
       - api_key
       - gemini_api_key
+
+  # ── Next.js Frontend ───────────────────────────────────────────────────────
+  frontend:
+    environment:
+      API_BASE_URL: http://backend:8000
+      API_KEY: ${API_KEY}
+      NODE_ENV: production
+
+  # ── Streamlit UI (legacy — accessible via Caddy if needed) ─────────────────
+  ui:
+    environment:
+      API_BASE_URL: http://backend:8000
+      API_KEY: ${API_KEY}
 
   # ── MLflow Tracking Server (PostgreSQL backend + S3 artifacts) ─────────────
   #
@@ -74,19 +115,19 @@ services:
     environment:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      # GCS alternative: GOOGLE_APPLICATION_CREDENTIALS: /path/to/service-account.json
 
   # ── PostgreSQL Backup (daily pg_dump with retention policy) ───────────────
   backup:
     image: prodrigestivill/postgres-backup-local
     restart: unless-stopped
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_DB: ${POSTGRES_DB:-lersha}
       POSTGRES_USER: ${POSTGRES_USER:-lersha}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lersha}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       SCHEDULE: "@daily"
       BACKUP_KEEP_DAYS: "30"
       BACKUP_KEEP_WEEKS: "4"

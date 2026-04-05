@@ -1,25 +1,20 @@
 # docker-compose.yml — BASE SERVICE DEFINITIONS
 #
-# This file defines all service skeletons with no hardcoded env values
-# and no host port bindings (moved to docker-compose.override.yml for dev
-# or docker-compose.prod.yml for prod).
+# Pure service skeletons: no env_file, no host ports, no inline secrets.
+# Environment and ports are injected by overlay files:
 #
-# Dev  (auto-loads override): docker compose up
-# Prod (explicit merge):      docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#   Dev  (auto-loads override): docker compose up
+#   Prod (explicit merge):      docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 services:
   # ── PostgreSQL ─────────────────────────────────────────────────────────────
   postgres:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-lersha}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lersha}
-      POSTGRES_DB: ${POSTGRES_DB:-lersha}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lersha}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-lersha}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -45,12 +40,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    env_file:
-      - .env
-    environment:
-      DB_URI: postgresql://${POSTGRES_USER:-lersha}:${POSTGRES_PASSWORD:-lersha}@postgres:5432/${POSTGRES_DB:-lersha}
-      MLFLOW_TRACKING_URI: http://mlflow:5000
-      REDIS_URL: redis://redis:6379/0
     volumes:
       - ./backend/models:/app/backend/models:ro
       - mlruns_data:/app/mlruns
@@ -71,19 +60,12 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    command: uv run celery -A backend.worker worker --loglevel=info --concurrency=4
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    env_file:
-      - .env
-    environment:
-      DB_URI: postgresql://${POSTGRES_USER:-lersha}:${POSTGRES_PASSWORD:-lersha}@postgres:5432/${POSTGRES_DB:-lersha}
-      MLFLOW_TRACKING_URI: http://mlflow:5000
-      REDIS_URL: redis://redis:6379/0
     volumes:
       - ./backend/models:/app/backend/models:ro
       - mlruns_data:/app/mlruns
@@ -98,10 +80,6 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
-    env_file:
-      - .env
-    environment:
-      API_BASE_URL: http://backend:8000
 
   # ── Next.js Frontend ───────────────────────────────────────────────────────
   frontend:
@@ -112,14 +90,8 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    environment:
-      # Server-side only — NOT exposed to browser (no NEXT_PUBLIC_ prefix)
-      API_BASE_URL: http://backend:8000
-      API_KEY: ${API_KEY}
 
   # ── MLflow Tracking Server ─────────────────────────────────────────────────
-  # Dev uses SQLite (overridden in docker-compose.override.yml).
-  # Prod uses PostgreSQL backend (overridden in docker-compose.prod.yml).
   mlflow:
     image: ghcr.io/mlflow/mlflow:latest
     restart: unless-stopped

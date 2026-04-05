@@ -2,15 +2,21 @@
 #
 # Auto-loaded by `docker compose up` (no -f flag needed).
 # Provides:
-#   - Hot reload for backend and UI via bind mounts
+#   - env_file injection for all services that need config
+#   - Hot reload for backend via bind mounts + uvicorn --reload
 #   - Host port bindings for local browser access
 #   - SQLite MLflow backend (lightweight for dev)
+#   - Celery eager mode (in-process, no worker needed)
 #
 # Do NOT use this file in production.
 
 services:
-  # ── PostgreSQL (expose on 5433 to avoid conflict with local PG18 on 5432) ──
+  # ── PostgreSQL (env + expose on 5433 to avoid conflict with local PG) ─────
   postgres:
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lersha}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lersha}
+      POSTGRES_DB: ${POSTGRES_DB:-lersha}
     ports:
       - "5433:5432"
 
@@ -22,6 +28,13 @@ services:
   # ── FastAPI Backend (hot reload + bind mounts) ─────────────────────────────
   backend:
     command: uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+    env_file:
+      - .env
+    environment:
+      DB_URI: postgresql://${POSTGRES_USER:-lersha}:${POSTGRES_PASSWORD:-lersha}@postgres:5432/${POSTGRES_DB:-lersha}
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      REDIS_URL: redis://redis:6379/0
+      CELERY_TASK_ALWAYS_EAGER: "true"
     ports:
       - "8000:8000"
     volumes:
@@ -29,10 +42,36 @@ services:
       - ./backend:/app/backend
       - ./ui:/app/ui
 
+  # ── Celery Worker (eager mode — not strictly needed but kept for parity) ──
+  worker:
+    command: uv run celery -A backend.worker worker --loglevel=info --concurrency=2
+    env_file:
+      - .env
+    environment:
+      DB_URI: postgresql://${POSTGRES_USER:-lersha}:${POSTGRES_PASSWORD:-lersha}@postgres:5432/${POSTGRES_DB:-lersha}
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      REDIS_URL: redis://redis:6379/0
+
   # ── Streamlit UI ───────────────────────────────────────────────────────────
   ui:
+    env_file:
+      - .env
+    environment:
+      API_BASE_URL: http://backend:8000
     ports:
       - "8501:8501"
+
+  # ── Next.js Frontend (dev — exposed for direct browser access) ─────────────
+  frontend:
+    environment:
+      API_BASE_URL: http://backend:8000
+      API_KEY: ${API_KEY}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
 
   # ── MLflow (SQLite backend, lightweight for dev) ───────────────────────────
   mlflow:
@@ -44,12 +83,3 @@ services:
       --default-artifact-root /mlruns
     ports:
       - "5000:5000"
-
-  # ── Next.js Frontend (dev — exposed for direct browser access) ─────────────
-  frontend:
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
