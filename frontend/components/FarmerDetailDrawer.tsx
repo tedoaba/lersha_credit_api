@@ -12,6 +12,7 @@ import DecisionBadge from "@/components/DecisionBadge";
 import ConfidenceGauge from "@/components/ConfidenceGauge";
 import ProbabilityBreakdown from "@/components/ProbabilityBreakdown";
 import FeatureContribChart from "@/components/FeatureContribChart";
+import FarmerAvatar from "@/components/FarmerAvatar";
 import type { GroupedFarmer, ResultsRecord } from "@/lib/types";
 
 interface FarmerDetailDrawerProps {
@@ -45,42 +46,58 @@ export default function FarmerDetailDrawer({ farmer, modelName, open, onClose }:
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="sm:max-w-3xl lg:max-w-5xl max-h-[90vh] overflow-hidden">
-        <DialogHeader>
-          <div className="flex items-start justify-between gap-3 pr-6">
-            <div>
-              <DialogTitle className="text-lg">{formatName(farmer)}</DialogTitle>
-              <DialogDescription className="font-mono mt-0.5">
-                {farmer.farmer_uid}
-              </DialogDescription>
-            </div>
-            <DecisionBadge decision={record.predicted_class_name} confidence={record.confidence_score} />
+      <DialogContent className="sm:max-w-4xl lg:max-w-6xl max-h-[90vh] overflow-hidden">
+        {/* Profile header: Avatar + Identity + Stats */}
+        <div className="flex flex-col sm:flex-row gap-6 items-start">
+          {/* Avatar */}
+          <div className="shrink-0 self-center sm:self-start">
+            <FarmerAvatar
+              firstName={farmer.first_name}
+              middleName={farmer.middle_name}
+              uid={farmer.farmer_uid}
+              size="lg"
+            />
           </div>
-        </DialogHeader>
 
-        {/* Summary info */}
-        <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-sm">
-          <div>
-            <dt className="text-muted-foreground text-xs">Gender</dt>
-            <dd className="font-medium">{farmer.gender ?? "\u2014"}</dd>
+          {/* Identity + summary stats */}
+          <div className="flex-1 min-w-0 space-y-4">
+            <DialogHeader className="p-0">
+              <div className="flex items-start justify-between gap-3 pr-8">
+                <div>
+                  <DialogTitle className="text-xl">{formatName(farmer)}</DialogTitle>
+                  <DialogDescription className="font-mono mt-1">
+                    {farmer.farmer_uid}
+                  </DialogDescription>
+                </div>
+                <DecisionBadge decision={record.predicted_class_name} confidence={record.confidence_score} />
+              </div>
+            </DialogHeader>
+
+            {/* Stats row */}
+            <dl className="grid grid-cols-2 sm:grid-cols-5 gap-x-6 gap-y-3 text-sm rounded-lg border bg-muted/30 p-4">
+              <div>
+                <dt className="text-muted-foreground text-xs uppercase tracking-wide">Gender</dt>
+                <dd className="font-medium mt-0.5">{farmer.gender ?? "\u2014"}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground text-xs uppercase tracking-wide">Model</dt>
+                <dd className="font-medium mt-0.5">{formatModelName(record.model_name)}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground text-xs uppercase tracking-wide">Decision</dt>
+                <dd className="font-medium mt-0.5">{record.predicted_class_name}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground text-xs uppercase tracking-wide">Confidence</dt>
+                <dd className="mt-0.5"><ConfidenceGauge score={record.confidence_score} /></dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground text-xs uppercase tracking-wide">Scored at</dt>
+                <dd className="font-medium mt-0.5">{formattedDate}</dd>
+              </div>
+            </dl>
           </div>
-          <div>
-            <dt className="text-muted-foreground text-xs">Model</dt>
-            <dd className="font-medium">{formatModelName(record.model_name)}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground text-xs">Decision</dt>
-            <dd className="font-medium">{record.predicted_class_name}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground text-xs">Confidence</dt>
-            <dd><ConfidenceGauge score={record.confidence_score} /></dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground text-xs">Scored at</dt>
-            <dd className="font-medium">{formattedDate}</dd>
-          </div>
-        </dl>
+        </div>
 
         <Separator />
 
