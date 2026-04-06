@@ -92,6 +92,49 @@ export interface ResultsRecord {
   gender: string | null;
 }
 
+// ── Grouped farmer (deduped across models) ─────────────────────────────────
+
+export interface GroupedFarmer {
+  farmer_uid: string;
+  first_name: string | null;
+  middle_name: string | null;
+  last_name: string | null;
+  gender: string | null;
+  timestamp: string | null;
+  models: ResultsRecord[];
+  consensus: "agree" | "mixed";
+  primaryDecision: string;
+}
+
+export function groupByFarmer(records: ResultsRecord[]): GroupedFarmer[] {
+  const map = new Map<string, ResultsRecord[]>();
+  for (const r of records) {
+    const existing = map.get(r.farmer_uid) ?? [];
+    existing.push(r);
+    map.set(r.farmer_uid, existing);
+  }
+
+  const groups: GroupedFarmer[] = [];
+  for (const [farmer_uid, models] of map) {
+    const first = models[0];
+    const decisions = new Set(models.map((m) => m.predicted_class_name));
+    groups.push({
+      farmer_uid,
+      first_name: first.first_name,
+      middle_name: first.middle_name,
+      last_name: first.last_name,
+      gender: first.gender,
+      timestamp: first.timestamp,
+      models,
+      consensus: decisions.size === 1 ? "agree" : "mixed",
+      primaryDecision: decisions.size === 1
+        ? models[0].predicted_class_name
+        : "Mixed",
+    });
+  }
+  return groups;
+}
+
 export interface ResultsResponse {
   total: number;
   records: ResultsRecord[];
@@ -108,9 +151,11 @@ export interface PaginatedResultsResponse {
 
 export interface AnalyticsSummaryResponse {
   total: number;
+  total_farmers: number;
   by_decision: Record<string, number>;
+  by_consensus: Record<string, number>;
   by_gender: Record<string, Record<string, number>>;
-  recent: ResultsRecord[];
+  by_model: Record<string, Record<string, number>>;
 }
 
 // ── Jobs list ───────────────────────────────────────────────────────────────

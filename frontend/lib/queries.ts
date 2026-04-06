@@ -49,6 +49,7 @@ export function useResultsPaginated(options: {
   decision?: string;
   gender?: string;
   model_name?: string;
+  job_id?: string;
 } = {}) {
   return useQuery({
     queryKey: ["results-paginated", options],

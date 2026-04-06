@@ -85,6 +85,7 @@ export class LershaClient {
       decision?: string;
       gender?: string;
       model_name?: string;
+      job_id?: string;
     } = {},
   ): Promise<PaginatedResultsResponse> {
     const params = new URLSearchParams();
@@ -94,6 +95,7 @@ export class LershaClient {
     if (options.decision) params.set("decision", options.decision);
     if (options.gender) params.set("gender", options.gender);
     if (options.model_name) params.set("model_name", options.model_name);
+    if (options.job_id) params.set("job_id", options.job_id);
     return this.request<PaginatedResultsResponse>(`/api/results?${params}`);
   }
 
