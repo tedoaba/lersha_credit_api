@@ -143,14 +143,14 @@ export default function DashboardPanel() {
                 {pieData.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-8">No data yet</p>
                 ) : (
-                  <ResponsiveContainer width="100%" height={280}>
+                  <ResponsiveContainer width="100%" height={360}>
                     <PieChart>
                       <Pie
                         data={pieData}
                         cx="50%"
                         cy="50%"
-                        innerRadius={60}
-                        outerRadius={100}
+                        innerRadius={80}
+                        outerRadius={130}
                         dataKey="value"
                         paddingAngle={2}
                         label={({ name, percent }) =>
@@ -183,7 +183,7 @@ export default function DashboardPanel() {
                 <CardTitle className="text-sm font-medium">Model Comparison</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={280}>
+                <ResponsiveContainer width="100%" height={360}>
                   <BarChart data={comparisonData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="decision" tick={{ fontSize: 11 }} />
@@ -211,7 +211,7 @@ export default function DashboardPanel() {
                 {genderData.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-8">No data yet</p>
                 ) : (
-                  <ResponsiveContainer width="100%" height={280}>
+                  <ResponsiveContainer width="100%" height={360}>
                     <BarChart data={genderData}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} />
                       <XAxis dataKey="gender" tick={{ fontSize: 11 }} />

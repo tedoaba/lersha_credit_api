@@ -38,7 +38,7 @@ export default function HomePage() {
       <JobProgressBanner />
 
       {/* Dashboard */}
-      <section>
+      <section className="mt-4">
         <DashboardPanel />
       </section>
 
