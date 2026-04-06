@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import DecisionBadge from "@/components/DecisionBadge";
 import type { ResultsRecord } from "@/lib/types";
 
 interface EvaluationCardProps {
@@ -11,26 +11,17 @@ function formatName(record: ResultsRecord): string {
   return parts.length > 0 ? parts.join(" ") : record.farmer_uid;
 }
 
-const CLASS_COLORS: Record<string, string> = {
-  Eligible: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
-  "Not Eligible": "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-};
-
 export default function EvaluationCard({ record }: EvaluationCardProps) {
-  const colorClass =
-    CLASS_COLORS[record.predicted_class_name] ??
-    "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200";
-
   const formattedDate = record.timestamp
     ? new Date(record.timestamp).toLocaleString()
-    : "—";
+    : "\u2014";
 
   return (
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-base flex items-start justify-between gap-2">
           <span>{formatName(record)}</span>
-          <Badge className={colorClass}>{record.predicted_class_name}</Badge>
+          <DecisionBadge decision={record.predicted_class_name} />
         </CardTitle>
       </CardHeader>
       <CardContent>
