@@ -62,7 +62,6 @@ jobs:
       GEMINI_MODEL: gemini-1.5-pro
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       FARMER_DATA_ALL: farmer_data_all
-      CHROMA_DB_PATH: /tmp/test_chroma
 
     steps:
       - uses: actions/checkout@v4
@@ -108,7 +107,7 @@ jobs:
       - name: Build Next.js frontend
         working-directory: frontend
         env:
-          NEXT_PUBLIC_API_BASE_URL: http://backend:8000
+          API_BASE_URL: http://backend:8006
         run: npm run build
 
   # ── Backend Docker Build ────────────────────────────────────────────────────
