@@ -8,11 +8,16 @@ from backend.config.config import config
 
 
 def _get_remote_address(request: Request) -> str:
-    """Get the remote IP address with a fallback for test/proxy environments.
+    """Get the real client IP, respecting reverse proxy headers.
 
-    Returns ``"127.0.0.1"`` when ``request.client`` is ``None`` (e.g. in tests
-    using ``httpx.AsyncClient`` with ``ASGITransport``).
+    Priority:
+      1. ``X-Forwarded-For`` header (first IP — set by Caddy, ALB, etc.)
+      2. Direct ``request.client.host``
+      3. ``"127.0.0.1"`` fallback for tests (httpx ASGITransport has no client)
     """
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
     if request.client is None:
         return "127.0.0.1"
     return get_remote_address(request)
