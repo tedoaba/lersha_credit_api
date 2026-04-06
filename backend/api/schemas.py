@@ -130,9 +130,11 @@ class AnalyticsSummaryResponse(BaseModel):
     """Response body for GET /v1/analytics/summary."""
 
     total: int
+    total_farmers: int
     by_decision: dict[str, int]
+    by_consensus: dict[str, int]
     by_gender: dict[str, dict[str, int]]
-    recent: list[ResultsRecord]
+    by_model: dict[str, dict[str, int]]
 
 
 # ── Jobs list endpoint ────────────────────────────────────────────────────────

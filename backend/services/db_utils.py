@@ -254,12 +254,13 @@ def get_row_by_number(table: str, row_number: int, order_by: str = "age") -> pd.
 # ── Write helpers ───────────────────────────────────────────────────────────
 
 
-def save_batch_evaluations(input_df: pd.DataFrame, evaluation_results: list) -> bool:
+def save_batch_evaluations(input_df: pd.DataFrame, evaluation_results: list, *, job_id: str | None = None) -> bool:
     """Persist a batch of evaluation records to the candidate_result table.
 
     Args:
         input_df: Original raw farmer DataFrame (provides name/UID fields).
         evaluation_results: List of result dicts from ``run_inferences``.
+        job_id: Optional inference job ID to link records to.
 
     Returns:
         bool: ``True`` on successful commit.
@@ -282,6 +283,7 @@ def save_batch_evaluations(input_df: pd.DataFrame, evaluation_results: list) -> 
                     top_feature_contributions=result["top_feature_contributions"],
                     rag_explanation=result["rag_explanation"],
                     model_name=result["model_name"],
+                    job_id=job_id,
                     timestamp=datetime.utcnow(),
                 )
 
@@ -294,6 +296,7 @@ def save_batch_evaluations(input_df: pd.DataFrame, evaluation_results: list) -> 
                     top_feature_contributions=[fc.dict() for fc in record.top_feature_contributions],
                     rag_explanation=record.rag_explanation,
                     model_name=record.model_name,
+                    job_id=record.job_id,
                     timestamp=record.timestamp,
                 )
                 session.add(db_row)
@@ -452,6 +455,7 @@ def get_results_paginated(
     decision: str | None = None,
     gender: str | None = None,
     model_name: str | None = None,
+    job_id: str | None = None,
 ) -> dict:
     """Fetch evaluation records with pagination, search, and filters.
 
@@ -482,6 +486,9 @@ def get_results_paginated(
     if gender:
         where_clauses.append("LOWER(fd.gender) = LOWER(:gender)")
         params["gender"] = gender
+    if job_id:
+        where_clauses.append("cr.job_id = :job_id")
+        params["job_id"] = job_id
 
     where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
@@ -538,10 +545,17 @@ def get_analytics_summary() -> dict:
         f"LEFT JOIN {farmer_table} fd ON cr.farmer_uid = fd.farmer_uid "
         f"GROUP BY fd.gender, cr.predicted_class_name"
     )
-    recent_sql = text(
-        f"SELECT cr.*, fd.gender FROM candidate_result cr "  # noqa: S608
-        f"LEFT JOIN {farmer_table} fd ON cr.farmer_uid = fd.farmer_uid "
-        f"ORDER BY cr.timestamp DESC LIMIT 10"
+    by_model_sql = text(
+        "SELECT model_name, predicted_class_name, COUNT(*) as count "
+        "FROM candidate_result GROUP BY model_name, predicted_class_name"
+    )
+    # Farmer-level consensus: group predictions per farmer, check if all models agree
+    consensus_sql = text(
+        "SELECT farmer_uid, "
+        "CASE WHEN COUNT(DISTINCT predicted_class_name) = 1 "
+        "     THEN MIN(predicted_class_name) "
+        "     ELSE 'Mixed' END AS consensus "
+        "FROM candidate_result GROUP BY farmer_uid"
     )
 
     with engine.connect() as conn:
@@ -560,15 +574,29 @@ def get_analytics_summary() -> dict:
             d = str(row["predicted_class_name"])
             by_gender.setdefault(g, {})[d] = int(row["count"])
 
-        # Recent
-        recent_df = pd.read_sql(recent_sql, conn)
-        recent = recent_df.to_dict(orient="records")
+        # By model x decision
+        model_df = pd.read_sql(by_model_sql, conn)
+        by_model: dict[str, dict[str, int]] = {}
+        for _, row in model_df.iterrows():
+            m = str(row["model_name"])
+            d = str(row["predicted_class_name"])
+            by_model.setdefault(m, {})[d] = int(row["count"])
+
+        # Farmer-level consensus
+        consensus_df = pd.read_sql(consensus_sql, conn)
+        total_farmers = len(consensus_df)
+        by_consensus: dict[str, int] = {}
+        for _, row in consensus_df.iterrows():
+            c = str(row["consensus"])
+            by_consensus[c] = by_consensus.get(c, 0) + 1
 
     return {
         "total": int(total_row),
+        "total_farmers": total_farmers,
         "by_decision": by_decision,
+        "by_consensus": by_consensus,
         "by_gender": by_gender,
-        "recent": recent,
+        "by_model": by_model,
     }
 
 

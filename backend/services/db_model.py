@@ -34,6 +34,7 @@ class CreditScoringRecordDB(Base):
     rag_explanation = Column(Text, nullable=False)
     model_name = Column(Text, nullable=False)
 
+    job_id = Column(String(36), nullable=True, index=True)
     timestamp = Column(TIMESTAMP(timezone=True), nullable=False)
 
 

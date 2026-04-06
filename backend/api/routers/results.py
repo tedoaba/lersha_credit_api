@@ -23,6 +23,7 @@ async def get_results(
     search: str | None = Query(default=None),
     decision: str | None = Query(default=None),
     gender: str | None = Query(default=None),
+    job_id: str | None = Query(default=None),
 ) -> PaginatedResultsResponse | ResultsResponse:
     """Retrieve evaluation results from the candidate_result table.
 
@@ -38,6 +39,7 @@ async def get_results(
             decision=decision,
             gender=gender,
             model_name=model_name,
+            job_id=job_id,
         )
         logger.info(
             "Returning page %d (%d results, total=%d)",

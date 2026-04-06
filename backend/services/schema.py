@@ -28,5 +28,6 @@ class CreditScoringRecord(BaseModel):
     top_feature_contributions: list[FeatureContribution]
     rag_explanation: str
     model_name: str
+    job_id: str | None = None
 
     timestamp: datetime
