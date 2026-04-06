@@ -14,9 +14,9 @@ import {
   Bar,
   XAxis,
   YAxis,
-  Legend,
   CartesianGrid,
   ReferenceLine,
+  Label,
 } from "recharts";
 
 const DECISION_COLORS: Record<string, string> = {
@@ -53,24 +53,58 @@ function formatFeatureName(name: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-/** Recharts custom legend renderer for pie charts with color mapping */
-function renderPieLegend(colorMap: Record<string, string>) {
-  return function PieLegend({ payload }: { payload?: Array<{ value: string }> }) {
-    if (!payload) return null;
-    return (
-      <div className="flex items-center justify-center gap-4 mt-2">
-        {payload.map((entry) => (
-          <span key={entry.value} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span
-              className="inline-block w-3 h-3 rounded-full shrink-0"
-              style={{ backgroundColor: colorMap[entry.value] ?? "#94a3b8" }}
-            />
-            {entry.value}
-          </span>
-        ))}
-      </div>
-    );
-  };
+/** Inline dot legend — avoids Recharts default which takes too much space */
+function DotLegend({ items }: { items: { label: string; color: string }[] }) {
+  return (
+    <div className="flex items-center justify-center gap-3 mt-1">
+      {items.map((item) => (
+        <span key={item.label} className="flex items-center gap-1 text-[10px] text-muted-foreground">
+          <span
+            className="inline-block w-2 h-2 rounded-full shrink-0"
+            style={{ backgroundColor: item.color }}
+          />
+          {item.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** Compact chart card with hover shadow lift */
+function ChartCard({
+  title,
+  subtitle,
+  children,
+  className = "",
+}: {
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <Card className={`transition-shadow duration-200 hover:shadow-lg ${className}`}>
+      <CardHeader className="pb-0 pt-3 px-4">
+        <CardTitle className="text-xs font-semibold leading-none">{title}</CardTitle>
+        <p className="text-[10px] text-muted-foreground leading-snug">{subtitle}</p>
+      </CardHeader>
+      <CardContent className="px-2 pb-2 pt-1">
+        {children}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Center label for donut charts — shows key metric inside the hole */
+function DonutCenterLabel({ viewBox, line1, line2 }: { viewBox?: { cx: number; cy: number }; line1: string; line2: string }) {
+  if (!viewBox) return null;
+  const { cx, cy } = viewBox;
+  return (
+    <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central">
+      <tspan x={cx} dy="-0.4em" className="fill-foreground text-lg font-bold">{line1}</tspan>
+      <tspan x={cx} dy="1.3em" className="fill-muted-foreground text-[9px]">{line2}</tspan>
+    </text>
+  );
 }
 
 export default function DashboardPanel() {
@@ -79,7 +113,6 @@ export default function DashboardPanel() {
   const byModel = analytics?.by_model ?? {};
   const modelNames = Object.keys(byModel).sort();
 
-  // Consensus = farmer-level (deduplicated, models agree or "Mixed")
   const byConsensus = analytics?.by_consensus ?? {};
   const totalFarmers = analytics?.total_farmers ?? 0;
   const consensusEligible = byConsensus["Eligible"] ?? 0;
@@ -92,14 +125,13 @@ export default function DashboardPanel() {
     { name: "Not Eligible", value: consensusNotEligible },
   ].filter((d) => d.value > 0);
 
-  // Model agreement rate
   const agreementCount = totalFarmers - consensusMixed;
+  const agreementRate = totalFarmers > 0 ? Math.round((agreementCount / totalFarmers) * 100) : 0;
   const agreementPieData = [
     { name: "Agreed", value: agreementCount },
     { name: "Mixed", value: consensusMixed },
   ].filter((d) => d.value > 0);
 
-  // Model comparison data
   const decisions = ["Eligible", "Review", "Not Eligible"];
   const comparisonData = decisions.map((d) => {
     const row: Record<string, string | number> = { decision: d };
@@ -109,7 +141,6 @@ export default function DashboardPanel() {
     return row;
   });
 
-  // Per-model stats for KPI detail lines
   const modelStats = modelNames.map((m) => {
     const d = byModel[m] ?? {};
     return {
@@ -128,10 +159,8 @@ export default function DashboardPanel() {
     "Not Eligible": decs["Not Eligible"] ?? 0,
   }));
 
-  // Confidence distribution
   const confidenceData = analytics?.confidence_distribution ?? [];
 
-  // Top risk factors
   const topRiskFactors = useMemo(() => {
     const factors = analytics?.top_risk_factors ?? [];
     return factors.map((f) => ({
@@ -141,17 +170,16 @@ export default function DashboardPanel() {
     }));
   }, [analytics?.top_risk_factors]);
 
-  const DecisionLegend = useMemo(() => renderPieLegend(DECISION_COLORS), []);
-  const AgreementLegend = useMemo(() => renderPieLegend(AGREEMENT_COLORS), []);
+  const topEligiblePct = totalFarmers > 0 ? Math.round((consensusEligible / totalFarmers) * 100) : 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {isLoading && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[...Array(4)].map((_, i) => (
             <Card key={i}>
-              <CardContent className="pt-6">
-                <div className="h-8 bg-muted rounded animate-pulse" />
+              <CardContent className="pt-4 pb-4">
+                <div className="h-6 bg-muted rounded animate-pulse" />
               </CardContent>
             </Card>
           ))}
@@ -166,16 +194,16 @@ export default function DashboardPanel() {
 
       {analytics && modelNames.length > 0 && (
         <>
-          {/* ─── Chapter 1: At a Glance ─────────────────────────────────── */}
+          {/* ─── KPIs ──────────────────────────────────────────────────────── */}
           <div>
-            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-4">
+            <h2 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">
               Overview
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               <KpiTile
                 label="Farmers Scored"
                 value={totalFarmers}
-                icon={<Users className="h-4 w-4 text-muted-foreground" />}
+                icon={<Users className="h-3.5 w-3.5 text-muted-foreground" />}
                 colorClass="text-foreground"
               />
               <KpiTile
@@ -183,7 +211,7 @@ export default function DashboardPanel() {
                 value={consensusEligible}
                 subtitle={totalFarmers > 0 ? `${((consensusEligible / totalFarmers) * 100).toFixed(1)}%` : undefined}
                 details={modelStats.map((m) => `${m.label}: ${m.eligible}`)}
-                icon={<CheckCircle className="h-4 w-4 text-emerald-600" />}
+                icon={<CheckCircle className="h-3.5 w-3.5 text-emerald-600" />}
                 colorClass="text-emerald-600 dark:text-emerald-400"
               />
               <KpiTile
@@ -191,7 +219,7 @@ export default function DashboardPanel() {
                 value={consensusReview}
                 subtitle={totalFarmers > 0 ? `${((consensusReview / totalFarmers) * 100).toFixed(1)}%` : undefined}
                 details={modelStats.map((m) => `${m.label}: ${m.review}`)}
-                icon={<AlertTriangle className="h-4 w-4 text-amber-500" />}
+                icon={<AlertTriangle className="h-3.5 w-3.5 text-amber-500" />}
                 colorClass="text-amber-600 dark:text-amber-400"
               />
               <KpiTile
@@ -199,50 +227,47 @@ export default function DashboardPanel() {
                 value={consensusNotEligible}
                 subtitle={totalFarmers > 0 ? `${((consensusNotEligible / totalFarmers) * 100).toFixed(1)}%` : undefined}
                 details={modelStats.map((m) => `${m.label}: ${m.notEligible}`)}
-                icon={<XCircle className="h-4 w-4 text-red-500" />}
+                icon={<XCircle className="h-3.5 w-3.5 text-red-500" />}
                 colorClass="text-red-600 dark:text-red-400"
               />
             </div>
           </div>
 
-          {/* ─── Chapter 2: Decision Landscape ──────────────────────────── */}
+          {/* ─── Charts — 3×2 balanced grid ────────────────────────────────── */}
           <div>
-            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-4">
-              Decision Landscape
+            <h2 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">
+              Analytics
             </h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Consensus donut — the headline */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Farmer Consensus</CardTitle>
-                  <p className="text-xs text-muted-foreground">
-                    Agreed decision across {modelNames.map(formatModelName).join(" & ")}
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  {pieData.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-8">No data yet</p>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={220}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
+
+              {/* 1 — Consensus donut */}
+              <ChartCard
+                title="Farmer Consensus"
+                subtitle={`Decision across ${modelNames.map(formatModelName).join(" & ")}`}
+              >
+                {pieData.length === 0 ? (
+                  <p className="text-[10px] text-muted-foreground text-center py-4">No data yet</p>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height={150}>
                       <PieChart>
                         <Pie
                           data={pieData}
                           cx="50%"
                           cy="50%"
-                          innerRadius={50}
-                          outerRadius={85}
+                          innerRadius={38}
+                          outerRadius={62}
                           dataKey="value"
                           paddingAngle={2}
-                          label={({ name, percent }) =>
-                            `${name} ${(percent * 100).toFixed(0)}%`
-                          }
+                          stroke="none"
                         >
                           {pieData.map((entry) => (
-                            <Cell
-                              key={entry.name}
-                              fill={DECISION_COLORS[entry.name] ?? "#94a3b8"}
-                            />
+                            <Cell key={entry.name} fill={DECISION_COLORS[entry.name] ?? "#94a3b8"} />
                           ))}
+                          <Label
+                            content={<DonutCenterLabel line1={`${topEligiblePct}%`} line2="eligible" />}
+                            position="center"
+                          />
                         </Pie>
                         <Tooltip
                           cursor={false}
@@ -251,75 +276,63 @@ export default function DashboardPanel() {
                             name,
                           ]}
                         />
-                        <Legend content={<DecisionLegend />} />
                       </PieChart>
                     </ResponsiveContainer>
-                  )}
-                </CardContent>
-              </Card>
+                    <DotLegend items={pieData.map((d) => ({ label: d.name, color: DECISION_COLORS[d.name] ?? "#94a3b8" }))} />
+                  </>
+                )}
+              </ChartCard>
 
-              {/* Gender breakdown — who is being scored */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Gender Breakdown</CardTitle>
-                  <p className="text-xs text-muted-foreground">
-                    Decision distribution by gender, combined across all models
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  {genderData.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-8">No data yet</p>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={220}>
-                      <BarChart data={genderData}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="gender" tick={{ fontSize: 12 }} />
-                        <YAxis tick={{ fontSize: 11 }} label={{ value: "Predictions", angle: -90, position: "insideLeft", style: { fontSize: 11, fill: "#888" } }} />
-                        <Tooltip cursor={false} />
-                        <Legend />
-                        <Bar dataKey="Eligible" fill={DECISION_COLORS["Eligible"]} stackId="a" />
+              {/* 2 — Gender breakdown */}
+              <ChartCard
+                title="Gender Breakdown"
+                subtitle="Decision distribution by gender"
+              >
+                {genderData.length === 0 ? (
+                  <p className="text-[10px] text-muted-foreground text-center py-4">No data yet</p>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height={150}>
+                      <BarChart data={genderData} margin={{ top: 5, right: 5, bottom: 0, left: -10 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                        <XAxis dataKey="gender" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 9 }} width={28} axisLine={false} tickLine={false} />
+                        <Tooltip cursor={{ fill: "rgba(0,0,0,0.04)" }} />
+                        <Bar dataKey="Eligible" fill={DECISION_COLORS["Eligible"]} stackId="a" radius={[0, 0, 0, 0]} />
                         <Bar dataKey="Review" fill={DECISION_COLORS["Review"]} stackId="a" />
-                        <Bar dataKey="Not Eligible" fill={DECISION_COLORS["Not Eligible"]} stackId="a" />
+                        <Bar dataKey="Not Eligible" fill={DECISION_COLORS["Not Eligible"]} stackId="a" radius={[3, 3, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </div>
+                    <DotLegend items={decisions.map((d) => ({ label: d, color: DECISION_COLORS[d] }))} />
+                  </>
+                )}
+              </ChartCard>
 
-          {/* ─── Chapter 3: Model Trust ─────────────────────────────────── */}
-          <div>
-            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-4">
-              Model Trust
-            </h2>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Model Agreement */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Model Agreement</CardTitle>
-                  <p className="text-xs text-muted-foreground">
-                    How often all models agree on a farmer&apos;s decision
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={220}>
+              {/* 3 — Model Agreement */}
+              <ChartCard
+                title="Model Agreement"
+                subtitle="How often all models agree"
+              >
+                <>
+                  <ResponsiveContainer width="100%" height={150}>
                     <PieChart>
                       <Pie
                         data={agreementPieData}
                         cx="50%"
                         cy="50%"
-                        innerRadius={50}
-                        outerRadius={85}
+                        innerRadius={38}
+                        outerRadius={62}
                         dataKey="value"
                         paddingAngle={2}
-                        label={({ name, percent }) =>
-                          `${name} ${(percent * 100).toFixed(0)}%`
-                        }
+                        stroke="none"
                       >
                         {agreementPieData.map((entry) => (
                           <Cell key={entry.name} fill={AGREEMENT_COLORS[entry.name] ?? "#94a3b8"} />
                         ))}
+                        <Label
+                          content={<DonutCenterLabel line1={`${agreementRate}%`} line2="agreed" />}
+                          position="center"
+                        />
                       </Pie>
                       <Tooltip
                         cursor={false}
@@ -328,131 +341,105 @@ export default function DashboardPanel() {
                           name,
                         ]}
                       />
-                      <Legend content={<AgreementLegend />} />
                     </PieChart>
                   </ResponsiveContainer>
-                </CardContent>
-              </Card>
+                  <DotLegend items={[{ label: "Agreed", color: AGREEMENT_COLORS.Agreed }, { label: "Mixed", color: AGREEMENT_COLORS.Mixed }]} />
+                </>
+              </ChartCard>
 
-              {/* Confidence Distribution */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Confidence Distribution</CardTitle>
-                  <p className="text-xs text-muted-foreground">
-                    How certain the models are about their predictions
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  {confidenceData.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-8">No data yet</p>
-                  ) : (
-                    <>
-                      <ResponsiveContainer width="100%" height={220}>
-                        <BarChart data={confidenceData}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                          <XAxis dataKey="range" tick={{ fontSize: 10 }} />
-                          <YAxis tick={{ fontSize: 11 }} label={{ value: "Predictions", angle: -90, position: "insideLeft", style: { fontSize: 11, fill: "#888" } }} />
-                          <Tooltip
-                            cursor={false}
-                            formatter={(value: number) => [`${value} predictions`, "Count"]}
-                          />
-                          <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                            {confidenceData.map((entry, i) => {
-                              const ratio = i / Math.max(confidenceData.length - 1, 1);
-                              const color = ratio < 0.4 ? CONFIDENCE_COLORS.Low : ratio < 0.7 ? CONFIDENCE_COLORS.Medium : CONFIDENCE_COLORS.High;
-                              return <Cell key={entry.range} fill={color} />;
-                            })}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                      <div className="flex items-center justify-center gap-4 mt-2">
-                        {Object.entries(CONFIDENCE_COLORS).map(([label, color]) => (
-                          <span key={label} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <span className="inline-block w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: color }} />
-                            {label}
-                          </span>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
+              {/* 4 — Confidence Distribution */}
+              <ChartCard
+                title="Confidence Distribution"
+                subtitle="How certain models are about predictions"
+              >
+                {confidenceData.length === 0 ? (
+                  <p className="text-[10px] text-muted-foreground text-center py-4">No data yet</p>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height={150}>
+                      <BarChart data={confidenceData} margin={{ top: 5, right: 5, bottom: 0, left: -10 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                        <XAxis dataKey="range" tick={{ fontSize: 8 }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 9 }} width={24} axisLine={false} tickLine={false} />
+                        <Tooltip
+                          cursor={{ fill: "rgba(0,0,0,0.04)" }}
+                          formatter={(value: number) => [`${value}`, "Count"]}
+                        />
+                        <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+                          {confidenceData.map((entry, i) => {
+                            const ratio = i / Math.max(confidenceData.length - 1, 1);
+                            const color = ratio < 0.4 ? CONFIDENCE_COLORS.Low : ratio < 0.7 ? CONFIDENCE_COLORS.Medium : CONFIDENCE_COLORS.High;
+                            return <Cell key={entry.range} fill={color} />;
+                          })}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                    <DotLegend items={Object.entries(CONFIDENCE_COLORS).map(([l, c]) => ({ label: l, color: c }))} />
+                  </>
+                )}
+              </ChartCard>
 
-              {/* Model Comparison */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Model Comparison</CardTitle>
-                  <p className="text-xs text-muted-foreground">
-                    Side-by-side decisions per model
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <BarChart data={comparisonData}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="decision" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} label={{ value: "Count", angle: -90, position: "insideLeft", style: { fontSize: 11, fill: "#888" } }} />
-                      <Tooltip cursor={false} />
-                      <Legend />
+              {/* 5 — Model Comparison */}
+              <ChartCard
+                title="Model Comparison"
+                subtitle="Side-by-side decisions per model"
+              >
+                <>
+                  <ResponsiveContainer width="100%" height={150}>
+                    <BarChart data={comparisonData} margin={{ top: 5, right: 5, bottom: 0, left: -10 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                      <XAxis dataKey="decision" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 9 }} width={24} axisLine={false} tickLine={false} />
+                      <Tooltip cursor={{ fill: "rgba(0,0,0,0.04)" }} />
                       {modelNames.map((m, i) => (
                         <Bar
                           key={m}
                           dataKey={formatModelName(m)}
                           fill={MODEL_COLORS[i % MODEL_COLORS.length]}
+                          radius={[3, 3, 0, 0]}
                         />
                       ))}
                     </BarChart>
                   </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
+                  <DotLegend items={modelNames.map((m, i) => ({ label: formatModelName(m), color: MODEL_COLORS[i % MODEL_COLORS.length] }))} />
+                </>
+              </ChartCard>
 
-          {/* ─── Chapter 4: What Drives Decisions ───────────────────────── */}
-          <div>
-            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-4">
-              What Drives Decisions
-            </h2>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Top Risk Factors</CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  Average SHAP feature impact across all predictions — which factors most influence credit decisions
-                </p>
-              </CardHeader>
-              <CardContent>
+              {/* 6 — SHAP Top Risk Factors (fills the last grid slot) */}
+              <ChartCard
+                title="Top Risk Factors"
+                subtitle="SHAP feature impact on credit decisions"
+              >
                 {topRiskFactors.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">No data yet</p>
+                  <p className="text-[10px] text-muted-foreground text-center py-4">No data yet</p>
                 ) : (
                   <>
-                    <ResponsiveContainer width="100%" height={360}>
+                    <ResponsiveContainer width="100%" height={150}>
                       <BarChart
-                        data={topRiskFactors.slice(0, 12)}
+                        data={topRiskFactors.slice(0, 6)}
                         layout="vertical"
-                        margin={{ left: 10, right: 20, top: 5, bottom: 20 }}
+                        margin={{ left: 0, right: 10, top: 2, bottom: 2 }}
                       >
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                        <XAxis
-                          type="number"
-                          tick={{ fontSize: 11 }}
-                          label={{ value: "Mean |SHAP value|", position: "bottom", offset: 10, style: { fontSize: 12, fill: "#888" } }}
-                        />
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                        <XAxis type="number" tick={{ fontSize: 8 }} axisLine={false} tickLine={false} />
                         <YAxis
                           type="category"
                           dataKey="feature"
-                          tick={{ fontSize: 12 }}
-                          width={150}
+                          tick={{ fontSize: 9 }}
+                          width={100}
+                          axisLine={false}
+                          tickLine={false}
                         />
                         <Tooltip
-                          cursor={false}
+                          cursor={{ fill: "rgba(0,0,0,0.04)" }}
                           formatter={(value: number) => [
                             `${Math.abs(value).toFixed(4)}`,
-                            value > 0 ? "Increases credit risk" : "Reduces credit risk",
+                            value > 0 ? "Increases risk" : "Reduces risk",
                           ]}
                         />
-                        <ReferenceLine x={0} stroke="#666" />
-                        <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                          {topRiskFactors.slice(0, 12).map((entry) => (
+                        <ReferenceLine x={0} stroke="#d4d4d8" />
+                        <Bar dataKey="value" radius={[0, 3, 3, 0]}>
+                          {topRiskFactors.slice(0, 6).map((entry) => (
                             <Cell
                               key={entry.feature}
                               fill={entry.value > 0 ? SHAP_COLORS.increases_risk : SHAP_COLORS.reduces_risk}
@@ -461,20 +448,14 @@ export default function DashboardPanel() {
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
-                    <div className="flex items-center justify-center gap-6 mt-3">
-                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <span className="inline-block w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: SHAP_COLORS.increases_risk }} />
-                        Increases credit risk
-                      </span>
-                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <span className="inline-block w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: SHAP_COLORS.reduces_risk }} />
-                        Reduces credit risk
-                      </span>
-                    </div>
+                    <DotLegend items={[
+                      { label: "Increases risk", color: SHAP_COLORS.increases_risk },
+                      { label: "Reduces risk", color: SHAP_COLORS.reduces_risk },
+                    ]} />
                   </>
                 )}
-              </CardContent>
-            </Card>
+              </ChartCard>
+            </div>
           </div>
         </>
       )}
@@ -504,22 +485,22 @@ function KpiTile({
   colorClass: string;
 }) {
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-1">
-        <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+    <Card className="transition-shadow duration-200 hover:shadow-md">
+      <CardHeader className="flex flex-row items-center justify-between pb-0 pt-2.5 px-3">
+        <CardTitle className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
           {label}
         </CardTitle>
         {icon}
       </CardHeader>
-      <CardContent>
-        <p className={`text-3xl font-bold tabular-nums ${colorClass}`}>{value}</p>
+      <CardContent className="px-3 pb-2.5 pt-0">
+        <p className={`text-xl font-bold tabular-nums leading-tight ${colorClass}`}>{value}</p>
         {subtitle && (
-          <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">{subtitle}</p>
         )}
         {details && details.length > 0 && (
-          <div className="mt-2 space-y-0.5">
+          <div className="mt-1 space-y-0">
             {details.map((d) => (
-              <p key={d} className="text-xs text-muted-foreground">{d}</p>
+              <p key={d} className="text-[10px] text-muted-foreground leading-relaxed">{d}</p>
             ))}
           </div>
         )}
