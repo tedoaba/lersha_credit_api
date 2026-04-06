@@ -689,4 +689,15 @@ def get_recent_jobs(limit: int = 20) -> list[dict]:
     )
     with engine.connect() as conn:
         df = pd.read_sql(query, conn, params={"lim": limit})
-    return df.to_dict(orient="records")
+    # Convert to plain Python types that Pydantic can serialise:
+    # - UUID → str, NaN/NaT → None, Timestamp → datetime
+    records = []
+    for _, row in df.iterrows():
+        records.append({
+            "job_id": str(row["job_id"]),
+            "status": row["status"],
+            "error": row["error"] if pd.notna(row["error"]) else None,
+            "created_at": row["created_at"].to_pydatetime() if pd.notna(row["created_at"]) else None,
+            "completed_at": row["completed_at"].to_pydatetime() if pd.notna(row["completed_at"]) else None,
+        })
+    return records
