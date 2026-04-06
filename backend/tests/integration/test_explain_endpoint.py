@@ -43,10 +43,10 @@ def client(test_db_engine):  # noqa: ANN001
 
 
 @pytest.fixture()
-def mock_rag_gemini(mocker: Any) -> Any:
-    """Patch RagService._call_gemini to return a fixed string."""
+def mock_rag_llm(mocker: Any) -> Any:
+    """Patch RagService._call_llm to return a fixed string."""
     return mocker.patch(
-        "backend.chat.rag_service.RagService._call_gemini",
+        "backend.chat.rag_service.RagService._call_llm",
         return_value=FIXED_EXPLANATION,
     )
 
@@ -109,7 +109,7 @@ def seeded_job(test_db_engine) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def test_explain_returns_200_with_explanation(client, seeded_job, mock_rag_gemini, mock_redis_miss):
+def test_explain_returns_200_with_explanation(client, seeded_job, mock_rag_llm, mock_redis_miss):
     """POST /v1/explain returns 200 with a non-empty explanation for a valid job."""
     payload = {
         "job_id": seeded_job["job_id"],
@@ -129,7 +129,7 @@ def test_explain_returns_200_with_explanation(client, seeded_job, mock_rag_gemin
     assert body["latency_ms"] >= 0
 
 
-def test_explain_cache_hit_on_repeated_call(client, seeded_job, mock_rag_gemini, mocker):
+def test_explain_cache_hit_on_repeated_call(client, seeded_job, mock_rag_llm, mocker):
     """Second call with identical inputs returns cache_hit=True and skips Gemini."""
     redis_mock = mocker.patch("backend.chat.rag_service.redis.Redis.from_url")
     instance = redis_mock.return_value
@@ -164,7 +164,7 @@ def test_explain_cache_hit_on_repeated_call(client, seeded_job, mock_rag_gemini,
     assert r2.json()["explanation"] == FIXED_EXPLANATION
 
     # Gemini should only have been called once total
-    assert mock_rag_gemini.call_count == 1
+    assert mock_rag_llm.call_count == 1
 
 
 def test_explain_404_on_invalid_job_id(client):
@@ -194,7 +194,7 @@ def test_explain_403_without_api_key(client, seeded_job):
 # ---------------------------------------------------------------------------
 
 
-def test_prompt_version_in_response(client, seeded_job, mock_rag_gemini, mock_redis_miss, mocker):
+def test_prompt_version_in_response(client, seeded_job, mock_rag_llm, mock_redis_miss, mocker):
     """Response prompt_version reflects the active PROMPT_VERSION config."""
     from backend.config.config import config
 
@@ -218,7 +218,7 @@ def test_prompt_version_in_response(client, seeded_job, mock_rag_gemini, mock_re
 # ---------------------------------------------------------------------------
 
 
-def test_audit_log_entry_created_after_explain(client, seeded_job, mock_rag_gemini, mock_redis_miss, test_db_engine):
+def test_audit_log_entry_created_after_explain(client, seeded_job, mock_rag_llm, mock_redis_miss, test_db_engine):
     """After a successful explain (cache miss), rag_audit_log contains one new row."""
     payload = {
         "job_id": seeded_job["job_id"],
@@ -242,7 +242,7 @@ def test_audit_log_entry_created_after_explain(client, seeded_job, mock_rag_gemi
     assert latest.latency_ms is not None and latest.latency_ms >= 0
 
 
-def test_audit_log_on_cache_hit(client, seeded_job, mock_rag_gemini, test_db_engine, mocker):
+def test_audit_log_on_cache_hit(client, seeded_job, mock_rag_llm, test_db_engine, mocker):
     """Two explain calls produce two audit rows; second has cache_hit=True."""
     redis_mock = mocker.patch("backend.chat.rag_service.redis.Redis.from_url")
     instance = redis_mock.return_value

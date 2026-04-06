@@ -25,8 +25,8 @@ def _fresh_config(tmp_hparams: Path | None = None, monkeypatch=None):
     # Ensure required env vars are present (values are fake — only structure tested)
     env_overrides = {
         "API_KEY": "test-key",
-        "GEMINI_MODEL": "gemini-1.5-pro",
-        "GEMINI_API_KEY": "test-gemini-key",
+        "OLLAMA_MODEL_NAME": "test-model",
+        "OLLAMA_HOST": "http://localhost:11434",
         "DB_URI": "sqlite:///:memory:",
     }
     if monkeypatch:

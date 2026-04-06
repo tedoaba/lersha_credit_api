@@ -132,8 +132,8 @@ async def api_client() -> AsyncGenerator[AsyncClient, None]:
     before test collection begins.
     """
     os.environ.setdefault("API_KEY", "ci-test-key")
-    os.environ.setdefault("GEMINI_MODEL", "gemini-1.5-pro")
-    os.environ.setdefault("GEMINI_API_KEY", "test-gemini-key-fixture")
+    os.environ.setdefault("OLLAMA_MODEL_NAME", "test-model")
+    os.environ.setdefault("OLLAMA_HOST", "http://localhost:11434")
     os.environ.setdefault("DB_URI", "sqlite:///:memory:")
 
     # Override the already-initialised config singleton so tests are not
@@ -155,23 +155,19 @@ async def api_client() -> AsyncGenerator[AsyncClient, None]:
         app_config.api_key = original_api_key
 
 
-# ── mock_gemini ───────────────────────────────────────────────────────────────
+# ── mock_llm ─────────────────────────────────────────────────────────────────
 
 
 @pytest.fixture
-def mock_gemini(mocker: Any) -> Any:
-    """Patch the Gemini API client so no real API calls are made.
+def mock_llm(mocker: Any) -> Any:
+    """Patch the Ollama LLM call so no real API calls are made.
 
-    Patches ``backend.chat.rag_engine.gemini_client.models.generate_content``
-    to return a ``MagicMock`` whose ``.text`` attribute is the fixed string
+    Patches ``backend.chat.rag_engine._call_llm`` to return a fixed string
     ``"Fixed explanation for testing."``.  This makes any code path that calls
     ``get_rag_explanation()`` deterministic and free.
     """
-    mock_response = mocker.MagicMock()
-    mock_response.text = "Fixed explanation for testing."
-
     patched = mocker.patch(
-        "backend.chat.rag_engine.gemini_client.models.generate_content",
-        return_value=mock_response,
+        "backend.chat.rag_engine._call_llm",
+        return_value="Fixed explanation for testing.",
     )
     return patched

@@ -1,6 +1,6 @@
 """Unit tests for backend.chat.rag_service.RagService.
 
-All external I/O (PostgreSQL, Redis, Gemini) is mocked — no real connections
+All external I/O (PostgreSQL, Redis, LLM) is mocked — no real connections
 are made. Tests follow the arrange / act / assert pattern and are named to
 describe what they verify (not how).
 
@@ -59,29 +59,30 @@ def mock_redis(mocker):
 
 
 @pytest.fixture()
-def mock_gemini_response(mocker):
-    """Patch _call_gemini to return a fixed explanation string."""
+def mock_llm_response(mocker):
+    """Patch _call_llm to return a fixed explanation string."""
     return mocker.patch(
-        "backend.chat.rag_service.RagService._call_gemini",
+        "backend.chat.rag_service.RagService._call_llm",
         return_value=SAMPLE_EXPLANATION,
     )
 
 
 @pytest.fixture()
-def mock_embedder(mocker):
-    """Patch the SentenceTransformer encode call."""
+def mock_ollama_embed(mocker):
+    """Patch the Ollama embed call."""
     import numpy as np
 
     mocker.patch(
-        "backend.chat.rag_service.SentenceTransformer",
-        return_value=MagicMock(encode=MagicMock(return_value=np.zeros(384))),
+        "backend.chat.rag_service.RagService._ollama_embed",
+        return_value=np.zeros(1024).tolist(),
     )
 
 
 @pytest.fixture()
-def service(mock_session_cls, mock_redis, mock_embedder, mocker):
+def service(mock_session_cls, mock_redis, mock_ollama_embed, mocker):
     """Fully-mocked RagService instance."""
     mocker.patch("backend.chat.rag_service.db_engine", return_value=MagicMock())
+    mocker.patch("backend.chat.rag_service.httpx.Client")
     svc = RagService()
     return svc
 
@@ -119,8 +120,8 @@ def test_retrieve_audit_row_has_no_cache_hit(service, mock_session_cls):
 # ---------------------------------------------------------------------------
 
 
-def test_explain_cache_miss_calls_gemini_and_caches(service, mock_redis, mock_gemini_response):
-    """On cache miss: Gemini is called once and result is stored in Redis."""
+def test_explain_cache_miss_calls_gemini_and_caches(service, mock_redis, mock_llm_response):
+    """On cache miss: LLM is called once and result is stored in Redis."""
     result = service.explain(SAMPLE_PREDICTION, SAMPLE_SHAP, SAMPLE_FARMER_UID)
 
     assert isinstance(result, ExplainResult)
@@ -128,21 +129,21 @@ def test_explain_cache_miss_calls_gemini_and_caches(service, mock_redis, mock_ge
     assert result.cache_hit is False
     assert result.prompt_version == "v1"
 
-    mock_gemini_response.assert_called_once()
+    mock_llm_response.assert_called_once()
     mock_redis.set.assert_called_once()  # stored in cache
     key_arg = mock_redis.set.call_args[0][0]
     assert key_arg.startswith("rag:explain:")
 
 
-def test_explain_cache_hit_skips_gemini(service, mock_redis, mock_gemini_response):
-    """On cache hit: Gemini is NOT called and cached text is returned."""
+def test_explain_cache_hit_skips_gemini(service, mock_redis, mock_llm_response):
+    """On cache hit: LLM is NOT called and cached text is returned."""
     mock_redis.get.return_value = SAMPLE_EXPLANATION.encode()
 
     result = service.explain(SAMPLE_PREDICTION, SAMPLE_SHAP, SAMPLE_FARMER_UID)
 
     assert result.explanation == SAMPLE_EXPLANATION
     assert result.cache_hit is True
-    mock_gemini_response.assert_not_called()
+    mock_llm_response.assert_not_called()
 
 
 def test_explain_audit_log_written_on_cache_hit(service, mock_session_cls, mock_redis):
@@ -162,7 +163,7 @@ def test_explain_audit_log_written_on_cache_hit(service, mock_session_cls, mock_
 # ---------------------------------------------------------------------------
 
 
-def test_explain_redis_error_degrades_gracefully(service, mock_redis, mock_gemini_response, mocker):
+def test_explain_redis_error_degrades_gracefully(service, mock_redis, mock_llm_response, mocker):
     """When Redis raises RedisError, explain still returns a valid result (no 5xx)."""
     import redis
 
@@ -174,7 +175,7 @@ def test_explain_redis_error_degrades_gracefully(service, mock_redis, mock_gemin
 
     assert result.explanation == SAMPLE_EXPLANATION
     assert result.cache_hit is False  # treated as miss
-    mock_gemini_response.assert_called_once()
+    mock_llm_response.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

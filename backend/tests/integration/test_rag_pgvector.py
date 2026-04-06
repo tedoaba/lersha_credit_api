@@ -13,9 +13,9 @@ Tests:
 
 Prerequisites:
     - DB_URI env var pointing at test_lersha PostgreSQL (with pgvector extension)
-    - Migration 003 applied: uv run alembic upgrade head
+    - Migration 008 applied: uv run alembic upgrade head
     - pgvector Python package: pgvector>=0.3.0
-    - sentence-transformers model cached locally (all-MiniLM-L6-v2)
+    - Ollama running with mxbai-embed-large model available
 """
 
 from __future__ import annotations
@@ -25,31 +25,37 @@ import time
 import uuid
 from datetime import datetime
 
+import httpx
 import pytest
-from sentence_transformers import SentenceTransformer
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
+from backend.config.config import config
 from backend.services.db_model import RagAuditLogDB, RagDocumentDB
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
-_EMBEDDER = None  # Module-level cache to avoid reloading across tests
+_OLLAMA_CLIENT = None
 
 
-def _get_embedder() -> SentenceTransformer:
-    """Load the sentence-transformer model once per test session."""
-    global _EMBEDDER  # noqa: PLW0603
-    if _EMBEDDER is None:
-        _EMBEDDER = SentenceTransformer("all-MiniLM-L6-v2")
-    return _EMBEDDER
+def _get_ollama() -> httpx.Client:
+    """Get or create an Ollama HTTP client for test embeddings."""
+    global _OLLAMA_CLIENT  # noqa: PLW0603
+    if _OLLAMA_CLIENT is None:
+        _OLLAMA_CLIENT = httpx.Client(base_url=config.ollama_host, timeout=120.0)
+    return _OLLAMA_CLIENT
 
 
-def _embed(text: str) -> list[float]:
-    """Return a 384-float embedding for the given text string."""
-    return _get_embedder().encode(text).tolist()
+def _embed(input_text: str) -> list[float]:
+    """Return an embedding for the given text string via Ollama."""
+    resp = _get_ollama().post(
+        "/api/embed",
+        json={"model": config.embedder_model, "input": [input_text]},
+    )
+    resp.raise_for_status()
+    return resp.json()["embeddings"][0]
 
 
 @pytest.fixture(scope="module")
@@ -76,7 +82,6 @@ def seed_docs(pg_engine):
     Removes all inserted rows after the test via DELETE on the known doc_ids.
     """
     now = datetime.utcnow()
-    embedder = _get_embedder()
 
     feature_docs = [
         ("net_income_test", "Net income is total income minus total cost — the primary creditworthiness indicator."),
@@ -108,7 +113,7 @@ def seed_docs(pg_engine):
                 category=category,
                 title=name.replace("_", " ").title(),
                 content=content,
-                embedding=embedder.encode(content).tolist(),
+                embedding=_embed(content),
                 created_at=now,
                 updated_at=now,
             )

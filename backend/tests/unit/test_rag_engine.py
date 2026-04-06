@@ -15,7 +15,7 @@ from __future__ import annotations
 import importlib
 import sys
 from typing import Any
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -56,11 +56,9 @@ class TestRetrieveDocsReturnType:
 
         with (
             patch("backend.chat.rag_engine.Session", return_value=mock_session_instance),
-            patch("backend.chat.rag_engine._embedder") as mock_embedder,
+            patch("backend.chat.rag_engine._ollama_embed", return_value=[[0.0] * 1024]),
             patch("backend.chat.rag_engine.db_engine"),
         ):
-            mock_embedder.encode.return_value = MagicMock(tolist=lambda: [0.0] * 384)
-
             from backend.chat.rag_engine import retrieve_docs
 
             result = retrieve_docs("Model predicted: Eligible\nSHAP contributions: {}")
@@ -94,11 +92,9 @@ class TestRetrieveDocsEmptyResults:
 
         with (
             patch("backend.chat.rag_engine.Session", return_value=mock_session_instance),
-            patch("backend.chat.rag_engine._embedder") as mock_embedder,
+            patch("backend.chat.rag_engine._ollama_embed", return_value=[[0.0] * 1024]),
             patch("backend.chat.rag_engine.db_engine"),
         ):
-            mock_embedder.encode.return_value = MagicMock(tolist=lambda: [0.0] * 384)
-
             from backend.chat.rag_engine import retrieve_docs
 
             result = retrieve_docs("xyzzy nonsense query that should not match anything")
@@ -132,11 +128,9 @@ class TestAuditLogWrittenOnce:
 
         with (
             patch("backend.chat.rag_engine.Session", side_effect=session_calls),
-            patch("backend.chat.rag_engine._embedder") as mock_embedder,
+            patch("backend.chat.rag_engine._ollama_embed", return_value=[[0.0] * 1024]),
             patch("backend.chat.rag_engine.db_engine"),
         ):
-            mock_embedder.encode.return_value = MagicMock(tolist=lambda: [0.0] * 384)
-
             from backend.chat.rag_engine import retrieve_docs
 
             retrieve_docs(
