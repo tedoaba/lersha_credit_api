@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useResultsPaginated } from "@/lib/queries";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -23,9 +22,14 @@ import {
 import DecisionBadge from "@/components/DecisionBadge";
 import FarmerDetailDrawer from "@/components/FarmerDetailDrawer";
 import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
-import type { ResultsRecord } from "@/lib/types";
+import { groupByFarmer } from "@/lib/types";
+import type { GroupedFarmer } from "@/lib/types";
 
 const PER_PAGE = 20;
+
+function formatModelName(name: string): string {
+  return name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 export default function FarmersPanel() {
   const [page, setPage] = useState(1);
@@ -35,7 +39,8 @@ export default function FarmersPanel() {
   const [gender, setGender] = useState<string>("");
   const [modelName, setModelName] = useState<string>("");
 
-  const [selectedRecord, setSelectedRecord] = useState<ResultsRecord | null>(null);
+  const [selectedFarmer, setSelectedFarmer] = useState<GroupedFarmer | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const { data, isLoading, error } = useResultsPaginated({
@@ -46,6 +51,17 @@ export default function FarmersPanel() {
     gender: gender || undefined,
     model_name: modelName || undefined,
   });
+
+  const grouped = useMemo(() => (data ? groupByFarmer(data.records) : []), [data]);
+
+  // Derive model columns dynamically from data
+  const modelColumns = useMemo(() => {
+    const set = new Set<string>();
+    for (const farmer of grouped) {
+      for (const m of farmer.models) set.add(m.model_name);
+    }
+    return Array.from(set).sort();
+  }, [grouped]);
 
   const totalPages = data ? Math.ceil(data.total / PER_PAGE) : 0;
 
@@ -66,21 +82,14 @@ export default function FarmersPanel() {
 
   const hasFilters = search || decision || gender || modelName;
 
-  const openDrawer = useCallback((record: ResultsRecord) => {
-    setSelectedRecord(record);
+  const openDrawer = useCallback((farmer: GroupedFarmer, model: string) => {
+    setSelectedFarmer(farmer);
+    setSelectedModel(model);
     setDrawerOpen(true);
   }, []);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        {data && (
-          <Badge variant="secondary" className="text-sm">
-            {data.total} farmer{data.total !== 1 ? "s" : ""}
-          </Badge>
-        )}
-      </div>
-
       {/* Search and Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <form onSubmit={handleSearch} className="flex gap-2 flex-1 max-w-md">
@@ -100,7 +109,7 @@ export default function FarmersPanel() {
 
         <div className="flex gap-2 flex-wrap">
           <Select value={decision} onValueChange={(v) => { setDecision(!v || v === "all" ? "" : v); setPage(1); }}>
-            <SelectTrigger className="w-[140px]">
+            <SelectTrigger className="w-35">
               <SelectValue placeholder="Decision" />
             </SelectTrigger>
             <SelectContent>
@@ -112,7 +121,7 @@ export default function FarmersPanel() {
           </Select>
 
           <Select value={gender} onValueChange={(v) => { setGender(!v || v === "all" ? "" : v); setPage(1); }}>
-            <SelectTrigger className="w-[130px]">
+            <SelectTrigger className="w-32">
               <SelectValue placeholder="Gender" />
             </SelectTrigger>
             <SelectContent>
@@ -123,7 +132,7 @@ export default function FarmersPanel() {
           </Select>
 
           <Select value={modelName} onValueChange={(v) => { setModelName(!v || v === "all" ? "" : v); setPage(1); }}>
-            <SelectTrigger className="w-[150px]">
+            <SelectTrigger className="w-38">
               <SelectValue placeholder="Model" />
             </SelectTrigger>
             <SelectContent>
@@ -142,7 +151,6 @@ export default function FarmersPanel() {
         </div>
       </div>
 
-      {/* Loading / Error states */}
       {isLoading && (
         <div className="text-sm text-muted-foreground animate-pulse">Loading farmers...</div>
       )}
@@ -161,7 +169,6 @@ export default function FarmersPanel() {
         </div>
       )}
 
-      {/* Table */}
       {data && data.total > 0 && (
         <>
           <div className="rounded-md border">
@@ -171,39 +178,50 @@ export default function FarmersPanel() {
                   <TableHead className="w-10">#</TableHead>
                   <TableHead>Farmer</TableHead>
                   <TableHead className="hidden sm:table-cell">Gender</TableHead>
-                  <TableHead>Decision</TableHead>
-                  <TableHead className="hidden sm:table-cell">Model</TableHead>
+                  {modelColumns.map((col) => (
+                    <TableHead key={col}>{formatModelName(col)}</TableHead>
+                  ))}
                   <TableHead className="hidden md:table-cell">Scored at</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.records.map((record, i) => {
+                {grouped.map((farmer, i) => {
                   const name =
-                    [record.first_name, record.middle_name, record.last_name]
+                    [farmer.first_name, farmer.middle_name, farmer.last_name]
                       .filter(Boolean)
-                      .join(" ") || record.farmer_uid;
+                      .join(" ") || farmer.farmer_uid;
                   const rowNum = (data.page - 1) * PER_PAGE + i + 1;
+                  const modelMap = new Map(farmer.models.map((m) => [m.model_name, m]));
 
                   return (
-                    <TableRow
-                      key={`${record.farmer_uid}-${i}`}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => openDrawer(record)}
-                    >
+                    <TableRow key={farmer.farmer_uid}>
                       <TableCell className="text-xs text-muted-foreground">{rowNum}</TableCell>
                       <TableCell className="font-medium">{name}</TableCell>
                       <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
-                        {record.gender ?? "\u2014"}
+                        {farmer.gender ?? "\u2014"}
                       </TableCell>
-                      <TableCell>
-                        <DecisionBadge decision={record.predicted_class_name} showIcon={false} />
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell text-xs text-muted-foreground">
-                        {record.model_name}
-                      </TableCell>
+                      {modelColumns.map((col) => {
+                        const model = modelMap.get(col);
+                        return (
+                          <TableCell key={col}>
+                            {model ? (
+                              <button
+                                type="button"
+                                title={`View ${formatModelName(col)} result`}
+                                onClick={() => openDrawer(farmer, col)}
+                                className="cursor-pointer hover:opacity-70 transition-opacity"
+                              >
+                                <DecisionBadge decision={model.predicted_class_name} showIcon={false} />
+                              </button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">\u2014</span>
+                            )}
+                          </TableCell>
+                        );
+                      })}
                       <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
-                        {record.timestamp
-                          ? new Date(record.timestamp).toLocaleString()
+                        {farmer.timestamp
+                          ? new Date(farmer.timestamp).toLocaleString()
                           : "\u2014"}
                       </TableCell>
                     </TableRow>
@@ -213,7 +231,6 @@ export default function FarmersPanel() {
             </Table>
           </div>
 
-          {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
@@ -263,9 +280,9 @@ export default function FarmersPanel() {
         </>
       )}
 
-      {/* Detail Modal */}
       <FarmerDetailDrawer
-        record={selectedRecord}
+        farmer={selectedFarmer}
+        modelName={selectedModel}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
       />
