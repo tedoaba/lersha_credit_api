@@ -2,16 +2,7 @@
 
 import { useAnalytics } from "@/lib/queries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import DecisionBadge from "@/components/DecisionBadge";
-import { CheckCircle, AlertTriangle, XCircle, Users } from "lucide-react";
+import { CheckCircle, AlertTriangle, XCircle, Users, HelpCircle } from "lucide-react";
 import {
   PieChart,
   Pie,
@@ -23,54 +14,77 @@ import {
   XAxis,
   YAxis,
   Legend,
+  CartesianGrid,
 } from "recharts";
 
 const DECISION_COLORS: Record<string, string> = {
   Eligible: "#10b981",
   Review: "#f59e0b",
   "Not Eligible": "#ef4444",
+  Mixed: "#8b5cf6",
 };
 
-function formatTimeAgo(timestamp: string | null): string {
-  if (!timestamp) return "\u2014";
-  const diff = Date.now() - new Date(timestamp).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+const MODEL_COLORS = ["#3b82f6", "#f97316", "#8b5cf6", "#06b6d4", "#ec4899"];
+
+function formatModelName(name: string): string {
+  return name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export default function DashboardPanel() {
   const { data: analytics, isLoading, error } = useAnalytics();
 
-  const byDecision = analytics?.by_decision ?? {};
-  const eligible = byDecision["Eligible"] ?? 0;
-  const review = byDecision["Review"] ?? 0;
-  const notEligible = byDecision["Not Eligible"] ?? 0;
-  const total = analytics?.total ?? 0;
+  const byModel = analytics?.by_model ?? {};
+  const modelNames = Object.keys(byModel).sort();
+
+  // Consensus = farmer-level (deduplicated, models agree or "Mixed")
+  const byConsensus = analytics?.by_consensus ?? {};
+  const totalFarmers = analytics?.total_farmers ?? 0;
+  const consensusEligible = byConsensus["Eligible"] ?? 0;
+  const consensusReview = byConsensus["Review"] ?? 0;
+  const consensusNotEligible = byConsensus["Not Eligible"] ?? 0;
+  const consensusMixed = byConsensus["Mixed"] ?? 0;
 
   const pieData = [
-    { name: "Eligible", value: eligible },
-    { name: "Review", value: review },
-    { name: "Not Eligible", value: notEligible },
+    { name: "Eligible", value: consensusEligible },
+    { name: "Review", value: consensusReview },
+    { name: "Not Eligible", value: consensusNotEligible },
+    { name: "Mixed", value: consensusMixed },
   ].filter((d) => d.value > 0);
 
+  // Model comparison data
+  const decisions = ["Eligible", "Review", "Not Eligible"];
+  const comparisonData = decisions.map((d) => {
+    const row: Record<string, string | number> = { decision: d };
+    for (const m of modelNames) {
+      row[formatModelName(m)] = byModel[m]?.[d] ?? 0;
+    }
+    return row;
+  });
+
+  // Per-model stats for KPI detail lines
+  const modelStats = modelNames.map((m) => {
+    const d = byModel[m] ?? {};
+    return {
+      label: formatModelName(m),
+      eligible: d["Eligible"] ?? 0,
+      review: d["Review"] ?? 0,
+      notEligible: d["Not Eligible"] ?? 0,
+    };
+  });
+
   const byGender = analytics?.by_gender ?? {};
-  const genderData = Object.entries(byGender).map(([gender, decisions]) => ({
+  const genderData = Object.entries(byGender).map(([gender, decs]) => ({
     gender,
-    Eligible: decisions["Eligible"] ?? 0,
-    Review: decisions["Review"] ?? 0,
-    "Not Eligible": decisions["Not Eligible"] ?? 0,
+    Eligible: decs["Eligible"] ?? 0,
+    Review: decs["Review"] ?? 0,
+    "Not Eligible": decs["Not Eligible"] ?? 0,
   }));
 
   return (
     <div className="space-y-8">
       {isLoading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {[...Array(5)].map((_, i) => (
             <Card key={i}>
               <CardContent className="pt-6">
                 <div className="h-8 bg-muted rounded animate-pulse" />
@@ -86,50 +100,61 @@ export default function DashboardPanel() {
         </div>
       )}
 
-      {analytics && (
+      {analytics && modelNames.length > 0 && (
         <>
-          {/* KPI Tiles */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* KPI tiles — farmer-level consensus with per-model breakdown */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             <KpiTile
-              label="Total Scored"
-              value={total}
+              label="Farmers Scored"
+              value={totalFarmers}
               icon={<Users className="h-4 w-4 text-muted-foreground" />}
               colorClass="text-foreground"
             />
             <KpiTile
               label="Eligible"
-              value={eligible}
-              subtitle={total > 0 ? `${((eligible / total) * 100).toFixed(1)}%` : undefined}
+              value={consensusEligible}
+              subtitle={totalFarmers > 0 ? `${((consensusEligible / totalFarmers) * 100).toFixed(1)}%` : undefined}
+              details={modelStats.map((m) => `${m.label}: ${m.eligible}`)}
               icon={<CheckCircle className="h-4 w-4 text-emerald-600" />}
               colorClass="text-emerald-600 dark:text-emerald-400"
             />
             <KpiTile
               label="Review"
-              value={review}
-              subtitle={total > 0 ? `${((review / total) * 100).toFixed(1)}%` : undefined}
+              value={consensusReview}
+              subtitle={totalFarmers > 0 ? `${((consensusReview / totalFarmers) * 100).toFixed(1)}%` : undefined}
+              details={modelStats.map((m) => `${m.label}: ${m.review}`)}
               icon={<AlertTriangle className="h-4 w-4 text-amber-500" />}
               colorClass="text-amber-600 dark:text-amber-400"
             />
             <KpiTile
               label="Not Eligible"
-              value={notEligible}
-              subtitle={total > 0 ? `${((notEligible / total) * 100).toFixed(1)}%` : undefined}
+              value={consensusNotEligible}
+              subtitle={totalFarmers > 0 ? `${((consensusNotEligible / totalFarmers) * 100).toFixed(1)}%` : undefined}
+              details={modelStats.map((m) => `${m.label}: ${m.notEligible}`)}
               icon={<XCircle className="h-4 w-4 text-red-500" />}
               colorClass="text-red-600 dark:text-red-400"
             />
+            <KpiTile
+              label="Mixed"
+              value={consensusMixed}
+              subtitle={totalFarmers > 0 && consensusMixed > 0 ? `${((consensusMixed / totalFarmers) * 100).toFixed(1)}%` : undefined}
+              icon={<HelpCircle className="h-4 w-4 text-purple-500" />}
+              colorClass="text-purple-600 dark:text-purple-400"
+            />
           </div>
 
-          {/* Charts row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Consensus donut */}
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Eligibility Distribution</CardTitle>
+                <CardTitle className="text-sm font-medium">Farmer Consensus</CardTitle>
               </CardHeader>
               <CardContent>
                 {pieData.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-8">No data yet</p>
                 ) : (
-                  <ResponsiveContainer width="100%" height={260}>
+                  <ResponsiveContainer width="100%" height={280}>
                     <PieChart>
                       <Pie
                         data={pieData}
@@ -152,7 +177,7 @@ export default function DashboardPanel() {
                       </Pie>
                       <Tooltip
                         formatter={(value: number, name: string) => [
-                          `${value} farmers`,
+                          `${value} farmer${value !== 1 ? "s" : ""}`,
                           name,
                         ]}
                       />
@@ -162,6 +187,32 @@ export default function DashboardPanel() {
               </CardContent>
             </Card>
 
+            {/* Model comparison */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Model Comparison</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={comparisonData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="decision" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip />
+                    <Legend />
+                    {modelNames.map((m, i) => (
+                      <Bar
+                        key={m}
+                        dataKey={formatModelName(m)}
+                        fill={MODEL_COLORS[i % MODEL_COLORS.length]}
+                      />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            {/* Gender breakdown */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Gender Breakdown</CardTitle>
@@ -170,10 +221,11 @@ export default function DashboardPanel() {
                 {genderData.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-8">No data yet</p>
                 ) : (
-                  <ResponsiveContainer width="100%" height={260}>
+                  <ResponsiveContainer width="100%" height={280}>
                     <BarChart data={genderData}>
-                      <XAxis dataKey="gender" tick={{ fontSize: 12 }} />
-                      <YAxis tick={{ fontSize: 12 }} />
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="gender" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} />
                       <Tooltip />
                       <Legend />
                       <Bar dataKey="Eligible" fill="#10b981" stackId="a" />
@@ -185,57 +237,13 @@ export default function DashboardPanel() {
               </CardContent>
             </Card>
           </div>
-
-          {/* Recent Activity */}
-          <div className="space-y-3">
-            <h2 className="text-base font-semibold">Recent Activity</h2>
-            {analytics.recent.length === 0 ? (
-              <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-                No scored records yet. Submit a prediction to get started.
-              </div>
-            ) : (
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Farmer</TableHead>
-                      <TableHead className="hidden sm:table-cell">Gender</TableHead>
-                      <TableHead>Decision</TableHead>
-                      <TableHead className="hidden sm:table-cell">Model</TableHead>
-                      <TableHead className="hidden md:table-cell">Scored</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {analytics.recent.map((record, i) => {
-                      const name =
-                        [record.first_name, record.middle_name, record.last_name]
-                          .filter(Boolean)
-                          .join(" ") || record.farmer_uid;
-
-                      return (
-                        <TableRow key={i}>
-                          <TableCell className="font-medium">{name}</TableCell>
-                          <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
-                            {record.gender ?? "\u2014"}
-                          </TableCell>
-                          <TableCell>
-                            <DecisionBadge decision={record.predicted_class_name} />
-                          </TableCell>
-                          <TableCell className="hidden sm:table-cell text-xs text-muted-foreground">
-                            {record.model_name}
-                          </TableCell>
-                          <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
-                            {formatTimeAgo(record.timestamp)}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </div>
         </>
+      )}
+
+      {analytics && modelNames.length === 0 && (
+        <div className="rounded-md border border-dashed p-8 text-center text-muted-foreground text-sm">
+          No scored records yet. Submit a prediction to get started.
+        </div>
       )}
     </div>
   );
@@ -245,12 +253,14 @@ function KpiTile({
   label,
   value,
   subtitle,
+  details,
   icon,
   colorClass,
 }: {
   label: string;
   value: number;
   subtitle?: string;
+  details?: string[];
   icon: React.ReactNode;
   colorClass: string;
 }) {
@@ -266,6 +276,13 @@ function KpiTile({
         <p className={`text-3xl font-bold tabular-nums ${colorClass}`}>{value}</p>
         {subtitle && (
           <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
+        )}
+        {details && details.length > 0 && (
+          <div className="mt-2 space-y-0.5">
+            {details.map((d) => (
+              <p key={d} className="text-xs text-muted-foreground">{d}</p>
+            ))}
+          </div>
         )}
       </CardContent>
     </Card>
