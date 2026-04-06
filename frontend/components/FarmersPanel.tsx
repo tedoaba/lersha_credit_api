@@ -211,7 +211,7 @@ export default function FarmersPanel() {
                                 onClick={() => openDrawer(farmer, col)}
                                 className="cursor-pointer hover:opacity-70 transition-opacity"
                               >
-                                <DecisionBadge decision={model.predicted_class_name} showIcon={false} />
+                                <DecisionBadge decision={model.predicted_class_name} confidence={model.confidence_score} showIcon={false} />
                               </button>
                             ) : (
                               <span className="text-xs text-muted-foreground">\u2014</span>

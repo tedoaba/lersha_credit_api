@@ -19,19 +19,22 @@ const DECISION_CONFIG: Record<string, { color: string; Icon: typeof CheckCircle 
 interface DecisionBadgeProps {
   decision: string;
   showIcon?: boolean;
+  confidence?: number | null;
   className?: string;
 }
 
-export default function DecisionBadge({ decision, showIcon = true, className = "" }: DecisionBadgeProps) {
+export default function DecisionBadge({ decision, showIcon = true, confidence, className = "" }: DecisionBadgeProps) {
   const config = DECISION_CONFIG[decision] ?? {
     color: "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200",
     Icon: AlertTriangle,
   };
 
+  const confidenceLabel = confidence != null ? ` (${Math.round(confidence * 100)}%)` : "";
+
   return (
     <Badge className={`${config.color} ${className} gap-1 font-medium`}>
       {showIcon && <config.Icon className="h-3 w-3" />}
-      {decision}
+      {decision}{confidenceLabel}
     </Badge>
   );
 }

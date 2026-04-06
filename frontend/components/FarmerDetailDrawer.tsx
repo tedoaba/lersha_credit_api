@@ -9,6 +9,8 @@ import {
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import DecisionBadge from "@/components/DecisionBadge";
+import ConfidenceGauge from "@/components/ConfidenceGauge";
+import ProbabilityBreakdown from "@/components/ProbabilityBreakdown";
 import FeatureContribChart from "@/components/FeatureContribChart";
 import type { GroupedFarmer, ResultsRecord } from "@/lib/types";
 
@@ -52,7 +54,7 @@ export default function FarmerDetailDrawer({ farmer, modelName, open, onClose }:
                 {farmer.farmer_uid}
               </DialogDescription>
             </div>
-            <DecisionBadge decision={record.predicted_class_name} />
+            <DecisionBadge decision={record.predicted_class_name} confidence={record.confidence_score} />
           </div>
         </DialogHeader>
 
@@ -71,12 +73,23 @@ export default function FarmerDetailDrawer({ farmer, modelName, open, onClose }:
             <dd className="font-medium">{record.predicted_class_name}</dd>
           </div>
           <div>
+            <dt className="text-muted-foreground text-xs">Confidence</dt>
+            <dd><ConfidenceGauge score={record.confidence_score} /></dd>
+          </div>
+          <div>
             <dt className="text-muted-foreground text-xs">Scored at</dt>
             <dd className="font-medium">{formattedDate}</dd>
           </div>
         </dl>
 
         <Separator />
+
+        {/* Probability breakdown */}
+        {record.class_probabilities && Object.keys(record.class_probabilities).length > 0 && (
+          <div className="rounded-lg border bg-muted/30 p-4">
+            <ProbabilityBreakdown probabilities={record.class_probabilities} />
+          </div>
+        )}
 
         {/* SHAP chart + RAG explanation */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

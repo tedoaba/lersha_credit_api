@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import DecisionBadge from "@/components/DecisionBadge";
+import ConfidenceGauge from "@/components/ConfidenceGauge";
 import type { ResultsRecord } from "@/lib/types";
 
 interface EvaluationCardProps {
@@ -21,7 +22,7 @@ export default function EvaluationCard({ record }: EvaluationCardProps) {
       <CardHeader className="pb-2">
         <CardTitle className="text-base flex items-start justify-between gap-2">
           <span>{formatName(record)}</span>
-          <DecisionBadge decision={record.predicted_class_name} />
+          <DecisionBadge decision={record.predicted_class_name} confidence={record.confidence_score} />
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -31,6 +32,9 @@ export default function EvaluationCard({ record }: EvaluationCardProps) {
 
           <dt className="text-muted-foreground">Model</dt>
           <dd>{record.model_name}</dd>
+
+          <dt className="text-muted-foreground">Confidence</dt>
+          <dd><ConfidenceGauge score={record.confidence_score} /></dd>
 
           <dt className="text-muted-foreground">Scored at</dt>
           <dd>{formattedDate}</dd>
