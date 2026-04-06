@@ -18,6 +18,22 @@ export interface PredictRequest {
   source: PredictSource;
   farmer_uid?: string;      // required when source === "Single Value"
   number_of_rows?: number;  // required when source === "Batch Prediction"; 1–100
+  gender?: string;           // optional batch filter
+  age_min?: number;          // optional batch filter
+  age_max?: number;          // optional batch filter
+}
+
+// ── Farmer search (autocomplete) ───────────────────────────────────────────
+
+export interface FarmerSearchResult {
+  farmer_uid: string;
+  first_name: string | null;
+  middle_name: string | null;
+  last_name: string | null;
+}
+
+export interface FarmerSearchResponse {
+  results: FarmerSearchResult[];
 }
 
 // ── Job lifecycle ───────────────────────────────────────────────────────────

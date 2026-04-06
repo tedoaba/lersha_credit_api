@@ -10,6 +10,7 @@ import type {
   AnalyticsSummaryResponse,
   ExplainRequest,
   ExplainResponse,
+  FarmerSearchResponse,
   JobAcceptedResponse,
   JobsListResponse,
   JobStatusResponse,
@@ -105,6 +106,12 @@ export class LershaClient {
   async getJobs(limit?: number): Promise<JobsListResponse> {
     const params = limit ? `?limit=${limit}` : "";
     return this.request<JobsListResponse>(`/api/jobs${params}`);
+  }
+
+  /** GET /api/farmers/search?q=... */
+  async searchFarmers(q: string, limit = 10): Promise<FarmerSearchResponse> {
+    const params = new URLSearchParams({ q, limit: String(limit) });
+    return this.request<FarmerSearchResponse>(`/api/farmers/search?${params}`);
   }
 
   /** POST /api/explain */

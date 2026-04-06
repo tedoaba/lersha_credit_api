@@ -77,6 +77,17 @@ export function useJobs(limit?: number) {
   });
 }
 
+// ── Farmer search (autocomplete) ───────────────────────────────────────────
+
+export function useFarmerSearch(query: string) {
+  return useQuery({
+    queryKey: ["farmer-search", query],
+    queryFn: () => lershaClient.searchFarmers(query),
+    enabled: query.length >= 2,
+    staleTime: 30_000,
+  });
+}
+
 // ── AI explanation ──────────────────────────────────────────────────────────
 
 export function useExplanation(req: ExplainRequest | null) {

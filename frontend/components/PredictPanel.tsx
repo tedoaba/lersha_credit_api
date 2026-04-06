@@ -57,7 +57,7 @@ export default function PredictPanel({ onCompleted }: PredictPanelProps) {
   const progress = job ? PROGRESS_MAP[job.status] : 0;
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="space-y-6">
       <PredictionForm />
 
       {/* Active Job Status */}

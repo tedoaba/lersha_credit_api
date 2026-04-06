@@ -30,6 +30,9 @@ class PredictRequest(BaseModel):
     source: Literal["Single Value", "Batch Prediction"]
     farmer_uid: str | None = None
     number_of_rows: int | None = Field(default=None, ge=1, le=100)
+    gender: str | None = None
+    age_min: int | None = Field(default=None, ge=0, le=120)
+    age_max: int | None = Field(default=None, ge=0, le=120)
 
     @model_validator(mode="after")
     def validate_source_fields(self) -> PredictRequest:
@@ -39,6 +42,21 @@ class PredictRequest(BaseModel):
         if self.source == "Batch Prediction" and not self.number_of_rows:
             raise ValueError("number_of_rows is required for Batch Prediction")
         return self
+
+
+class FarmerSearchResult(BaseModel):
+    """A single farmer search result for autocomplete."""
+
+    farmer_uid: str
+    first_name: str | None = None
+    middle_name: str | None = None
+    last_name: str | None = None
+
+
+class FarmerSearchResponse(BaseModel):
+    """Response body for GET /v1/farmers/search."""
+
+    results: list[FarmerSearchResult]
 
 
 class JobAcceptedResponse(BaseModel):

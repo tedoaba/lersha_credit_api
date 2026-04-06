@@ -86,6 +86,9 @@ def run_inference_task(job_id: str, payload: dict) -> None:
             source=payload["source"],
             filters=payload.get("farmer_uid"),
             number_of_rows=payload.get("number_of_rows"),
+            gender=payload.get("gender"),
+            age_min=payload.get("age_min"),
+            age_max=payload.get("age_max"),
         )
 
         active_models: list[str] = config.hyperparams.get("models", {}).get("active", ["xgboost", "random_forest"])

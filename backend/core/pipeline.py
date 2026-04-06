@@ -29,13 +29,24 @@ from backend.services.db_utils import fetch_multiple_raw_data, fetch_raw_data, s
 logger = get_logger(__name__)
 
 
-def match_inputs(source: str | None = None, filters: str | None = None, number_of_rows: int | None = None):
+def match_inputs(
+    source: str | None = None,
+    filters: str | None = None,
+    number_of_rows: int | None = None,
+    *,
+    gender: str | None = None,
+    age_min: int | None = None,
+    age_max: int | None = None,
+):
     """Fetch and engineer the input data for inference.
 
     Args:
         source: ``"Single Value"`` or ``"Batch Prediction"``.
         filters: ``farmer_uid`` value for single-value requests.
         number_of_rows: Number of rows for batch requests.
+        gender: Optional gender filter for batch requests.
+        age_min: Optional minimum age filter for batch requests.
+        age_max: Optional maximum age filter for batch requests.
 
     Returns:
         tuple: ``(original_data: pd.DataFrame, selected_data_36: pd.DataFrame)``
@@ -48,7 +59,13 @@ def match_inputs(source: str | None = None, filters: str | None = None, number_o
         initial_data_36 = apply_feature_engineering(original_data)
         selected_data_36 = get_candidate_data(initial_data_36, config.columns_36)
     elif source == "Batch Prediction":
-        original_data = fetch_multiple_raw_data(table_name=config.farmer_data_all, n_rows=number_of_rows)
+        original_data = fetch_multiple_raw_data(
+            table_name=config.farmer_data_all,
+            n_rows=number_of_rows,
+            gender=gender,
+            age_min=age_min,
+            age_max=age_max,
+        )
         initial_data_36 = apply_feature_engineering(original_data)
         selected_data_36 = get_candidate_data(initial_data_36, config.columns_36)
     else:

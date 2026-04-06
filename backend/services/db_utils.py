@@ -141,7 +141,14 @@ def fetch_raw_data(table_name: str, filters: str) -> pd.DataFrame:
     return df
 
 
-def fetch_multiple_raw_data(table_name: str, n_rows: int = 3) -> pd.DataFrame:
+def fetch_multiple_raw_data(
+    table_name: str,
+    n_rows: int = 3,
+    *,
+    gender: str | None = None,
+    age_min: int | None = None,
+    age_max: int | None = None,
+) -> pd.DataFrame:
     """Fetch a random sample of raw farmer rows via database-level RANDOM().
 
     FIXED: Uses ``ORDER BY RANDOM() LIMIT :n`` instead of a full-table
@@ -151,17 +158,60 @@ def fetch_multiple_raw_data(table_name: str, n_rows: int = 3) -> pd.DataFrame:
     Args:
         table_name: Database table to sample from.
         n_rows: Number of rows to return.
+        gender: Optional gender filter (case-insensitive).
+        age_min: Optional minimum age (inclusive).
+        age_max: Optional maximum age (inclusive).
 
     Returns:
         pd.DataFrame: ``n_rows`` randomly sampled rows.
     """
-    logger.info("Fetching %d random rows from '%s'", n_rows, table_name)
+    logger.info("Fetching %d random rows from '%s' (gender=%s, age=%s-%s)", n_rows, table_name, gender, age_min, age_max)
     engine = db_engine()
-    query = text(f"SELECT * FROM {table_name} ORDER BY RANDOM() LIMIT :n")  # noqa: S608
+
+    where_clauses: list[str] = []
+    params: dict[str, Any] = {"n": n_rows}
+
+    if gender:
+        where_clauses.append("LOWER(gender) = LOWER(:gender)")
+        params["gender"] = gender
+    if age_min is not None:
+        where_clauses.append("age >= :age_min")
+        params["age_min"] = age_min
+    if age_max is not None:
+        where_clauses.append("age <= :age_max")
+        params["age_max"] = age_max
+
+    where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+    query = text(f"SELECT * FROM {table_name} {where_sql} ORDER BY RANDOM() LIMIT :n")  # noqa: S608
+
     with engine.connect() as conn:
-        df = pd.read_sql(query, conn, params={"n": n_rows})
+        df = pd.read_sql(query, conn, params=params)
     logger.info("Fetched %d rows", len(df))
     return df
+
+
+def search_farmers(query: str, limit: int = 10) -> list[dict]:
+    """Search farmers by name or UID for autocomplete.
+
+    Args:
+        query: Search term (matched via ILIKE on first_name, middle_name, last_name, farmer_uid).
+        limit: Maximum results to return.
+
+    Returns:
+        list[dict]: Matching farmer records with uid and name fields.
+    """
+    engine = db_engine()
+    table_name = config.farmer_data_all
+    sql = text(
+        f"SELECT farmer_uid, first_name, middle_name, last_name "  # noqa: S608
+        f"FROM {table_name} "
+        f"WHERE first_name ILIKE :q OR middle_name ILIKE :q "
+        f"OR last_name ILIKE :q OR farmer_uid ILIKE :q "
+        f"ORDER BY first_name LIMIT :lim"
+    )
+    with engine.connect() as conn:
+        df = pd.read_sql(sql, conn, params={"q": f"%{query}%", "lim": limit})
+    return df.to_dict(orient="records")
 
 
 def fetch_and_filter_columns(table_name: str, columns_to_select: list, column_order: list) -> pd.DataFrame:

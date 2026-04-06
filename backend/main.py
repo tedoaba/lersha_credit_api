@@ -48,7 +48,7 @@ from slowapi.errors import RateLimitExceeded  # noqa: E402
 
 from backend.api.dependencies import limiter  # noqa: E402
 from backend.api.middleware import RequestIDMiddleware  # noqa: E402
-from backend.api.routers import analytics, explain, health, jobs, predict, results  # noqa: E402
+from backend.api.routers import analytics, explain, farmers, health, jobs, predict, results  # noqa: E402
 from backend.logger.logger import get_logger  # noqa: E402
 
 logger = get_logger(__name__)
@@ -110,6 +110,7 @@ def create_app() -> FastAPI:
     app.include_router(explain.router, prefix="/v1/explain", tags=["v1 — Explain"])
     app.include_router(analytics.router, prefix="/v1/analytics", tags=["v1 — Analytics"])
     app.include_router(jobs.router, prefix="/v1/jobs", tags=["v1 — Jobs"])
+    app.include_router(farmers.router, prefix="/v1/farmers", tags=["v1 — Farmers"])
 
     return app
 
