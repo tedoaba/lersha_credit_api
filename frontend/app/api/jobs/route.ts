@@ -5,15 +5,9 @@ const API_KEY = process.env.API_KEY ?? "";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
+  const limit = searchParams.get("limit") ?? "20";
 
-  // Forward all query params to backend
-  const params = new URLSearchParams();
-  for (const key of ["limit", "model_name", "page", "per_page", "search", "decision", "gender"]) {
-    const val = searchParams.get(key);
-    if (val) params.set(key, val);
-  }
-
-  const res = await fetch(`${API_BASE}/v1/results/?${params}`, {
+  const res = await fetch(`${API_BASE}/v1/jobs/?limit=${limit}`, {
     headers: { "X-API-Key": API_KEY },
     cache: "no-store",
   });
