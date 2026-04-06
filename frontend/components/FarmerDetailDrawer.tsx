@@ -45,7 +45,7 @@ export default function FarmerDetailDrawer({ farmer, modelName, open, onClose }:
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="sm:max-w-3xl lg:max-w-5xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-3xl lg:max-w-5xl max-h-[90vh] overflow-hidden">
         <DialogHeader>
           <div className="flex items-start justify-between gap-3 pr-6">
             <div>
@@ -103,11 +103,11 @@ export default function FarmerDetailDrawer({ farmer, modelName, open, onClose }:
             )}
           </div>
 
-          <div>
-            <h3 className="text-sm font-medium mb-3 text-muted-foreground uppercase tracking-wide">
+          <div className="flex flex-col min-h-0">
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground uppercase tracking-wide shrink-0">
               AI Explanation
             </h3>
-            <div className="rounded-lg border bg-muted/30 p-4">
+            <div className="rounded-lg border bg-muted/30 p-4 overflow-y-auto max-h-80">
               <p className="text-sm leading-relaxed whitespace-pre-line">
                 {record.rag_explanation || "No explanation available."}
               </p>
