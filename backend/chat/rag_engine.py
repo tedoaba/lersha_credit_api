@@ -1,4 +1,4 @@
-"""RAG explanation engine using PostgreSQL pgvector and Google Gemini.
+"""RAG explanation engine using PostgreSQL pgvector and Ollama.
 
 .. deprecated::
     This module is superseded by :class:`backend.chat.rag_service.RagService`
@@ -15,10 +15,9 @@ Migrated in 006-migrate-chroma-pgvector (2026-04-01):
   - get_rag_explanation() now accepts optional job_id and model_name for full
     audit trail population.
 
-Hardened in 004-harden-app-security (2026-03-29):
-  - Gemini generate_content call extracted to _call_gemini() helper.
-  - Both get_rag_explanation() and _call_gemini() are decorated with
-    @retry (up to 3 attempts, exponential backoff 2-10 s).
+LLM migrated from Google Gemini to Ollama (2026-04-06):
+  - _call_llm() uses Ollama /api/generate HTTP endpoint.
+  - Embeddings use Ollama /api/embed endpoint (mxbai-embed-large, 1024-dim).
 """
 
 from __future__ import annotations
@@ -28,9 +27,8 @@ import time
 import uuid as _uuid
 from pathlib import Path
 
+import httpx
 import yaml
-from google.genai import Client as GeminiClient
-from sentence_transformers import SentenceTransformer
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -43,17 +41,21 @@ from backend.services.db_utils import db_engine
 
 logger = get_logger(__name__)
 
-# ── Embedding model ────────────────────────────────────────────────────────────
-# Loaded once at module import to avoid the ~30 s weight-loading penalty on the
-# first inference request.  The model name is read from config so it is
-# changeable without code edits.
-_embedder: SentenceTransformer = SentenceTransformer(config.embedder_model)
+# ── Ollama HTTP client ─────────────────────────────────────────────────────────
+_ollama_client = httpx.Client(base_url=config.ollama_host, timeout=120.0)
 
-# ── Gemini client ──────────────────────────────────────────────────────────────
-gemini_client = GeminiClient(
-    api_key=config.gemini_api_key,
-    http_options={"timeout": 15_000},  # 15-second timeout per request
-)
+
+def _ollama_embed(texts: str | list[str]) -> list[list[float]]:
+    """Embed one or more texts via the Ollama /api/embed endpoint."""
+    if isinstance(texts, str):
+        texts = [texts]
+    resp = _ollama_client.post(
+        "/api/embed",
+        json={"model": config.embedder_model, "input": texts, "options": {"num_ctx": 8192}},
+    )
+    resp.raise_for_status()
+    return resp.json()["embeddings"]
+
 
 # ── SQL template for cosine-distance retrieval ─────────────────────────────────
 # Parameters:
@@ -76,7 +78,7 @@ _RETRIEVAL_SQL = text(
 )
 
 # Categories scoped for credit-scoring RAG retrieval
-_RAG_CATEGORIES: list[str] = ["feature_definition", "policy_rule"]
+_RAG_CATEGORIES: list[str] = ["feature_definition", "policy_rule", "domain_knowledge"]
 
 
 def retrieve_docs(
@@ -115,8 +117,8 @@ def retrieve_docs(
         k = int(hp.get("rag_top_k", 5))
     threshold = float(hp.get("rag_similarity_threshold", 0.75))
 
-    # Encode the query → 384-float list
-    query_vec: list[float] = _embedder.encode(query).tolist()
+    # Encode the query via Ollama embedding endpoint
+    query_vec: list[float] = _ollama_embed(query)[0]
 
     t_start = time.perf_counter()
     results: list[tuple[int, str, float]] = []
@@ -124,6 +126,10 @@ def retrieve_docs(
     engine = db_engine()
     try:
         with Session(engine) as session:
+            # IVFFlat index uses lists=100; with ~300 documents most lists
+            # contain very few rows.  Increase probes so the search covers
+            # all lists and returns accurate nearest-neighbour results.
+            session.execute(text("SET ivfflat.probes = 100"))
             rows = session.execute(
                 _RETRIEVAL_SQL,
                 {
@@ -177,8 +183,8 @@ def retrieve_docs(
     wait=wait_exponential(multiplier=1, min=2, max=10),
     reraise=True,
 )
-def _call_gemini(prompt: str) -> str:
-    """Call the Gemini API and extract the generated text.
+def _call_llm(prompt: str) -> str:
+    """Call the Ollama /api/generate endpoint and return the generated text.
 
     Retried up to 3 times with exponential backoff (2-10 s) on any exception.
     If all attempts fail the original exception is re-raised (``reraise=True``).
@@ -189,16 +195,16 @@ def _call_gemini(prompt: str) -> str:
     Returns:
         str: Stripped explanation text from the model response.
     """
-    response = gemini_client.models.generate_content(
-        model=config.gemini_model_id,
-        contents=prompt,
+    resp = _ollama_client.post(
+        "/api/generate",
+        json={
+            "model": config.ollama_model,
+            "prompt": prompt,
+            "stream": False,
+        },
     )
-
-    if hasattr(response, "text") and response.text:
-        return response.text.strip()
-    if hasattr(response, "candidates"):
-        return response.candidates[0].content.parts[0].text.strip()
-    return str(response).strip()
+    resp.raise_for_status()
+    return resp.json()["response"].strip()
 
 
 @retry(
@@ -215,7 +221,7 @@ def get_rag_explanation(
     """Generate a natural language explanation for a credit scoring prediction.
 
     Retrieves relevant feature definitions from the pgvector store and uses
-    Gemini to generate a paragraph-level explanation of the model's decision.
+    Ollama to generate a paragraph-level explanation of the model's decision.
 
     Retried up to 3 times with exponential backoff (2-10 s) on any exception.
     On persistent failure the exception is re-raised to the Celery task error
@@ -280,5 +286,5 @@ RESPONSE:
 Generate the paragraphs now.
 """
 
-    explanation = _call_gemini(prompt)
+    explanation = _call_llm(prompt)
     return explanation

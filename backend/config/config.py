@@ -138,8 +138,14 @@ class Config:
         # Legacy path: used by rag_engine.get_rag_explanation() only.
         # New code should use prompt_version + prompt_dir via RagService.
         self.prompt_path = os.getenv("PROMPT_PATH", str(BASE_DIR / "backend" / "prompts" / "prompts.yaml"))
-        self.gemini_model_id = os.getenv("GEMINI_MODEL")
-        self.embedder_model = os.getenv("EMBEDDER_MODEL", "all-MiniLM-L6-v2")
+
+        # Ollama LLM for RAG explanation generation
+        self.ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        self.ollama_model = os.getenv("OLLAMA_MODEL_NAME")
+
+        # Ollama embedding model (mxbai-embed-large produces 1024-dim vectors)
+        self.embedder_model = os.getenv("OLLAMA_EMBEDDER_MODEL", "mxbai-embed-large")
+        self.embedder_dim = int(os.getenv("OLLAMA_EMBEDDER_DIM", "1024"))
 
         # ── RAG Prompt Versioning ──────────────────────────────────────────────
         # PROMPT_VERSION selects which vN.yaml file is loaded from prompt_dir.
@@ -170,13 +176,9 @@ class Config:
         if not self.api_key:
             raise ValueError("API_KEY environment variable (or Docker secret 'api_key') not set")
 
-        # ── Required LLM keys ──────────────────────────────────────────────
-        # Reads from /run/secrets/gemini_api_key (Docker prod) or GEMINI_API_KEY env var
-        self.gemini_api_key = _read_secret("gemini_api_key", "GEMINI_API_KEY")
-        if not self.gemini_model_id:
-            raise ValueError("GEMINI_MODEL environment variable not set")
-        if not self.gemini_api_key:
-            raise ValueError("GEMINI_API_KEY environment variable (or Docker secret 'gemini_api_key') not set")
+        # ── Required LLM config ────────────────────────────────────────────
+        if not self.ollama_model:
+            raise ValueError("OLLAMA_MODEL_NAME environment variable not set")
 
         # ── Hyperparameters from YAML ──────────────────────────────────────
         _hparams_path = BASE_DIR / "backend" / "config" / "hyperparams.yaml"

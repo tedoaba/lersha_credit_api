@@ -57,7 +57,7 @@ class RagDocumentDB(Base):
     """ORM model for the rag_documents table.
 
     Stores semantic knowledge documents (feature definitions, policy rules)
-    with a 384-dimensional pgvector embedding for cosine-distance retrieval.
+    with a 1024-dimensional pgvector embedding for cosine-distance retrieval.
     Managed by Alembic migration 003_add_pgvector.
 
     Attributes:
@@ -66,7 +66,7 @@ class RagDocumentDB(Base):
         category: Document classification (e.g. 'feature_definition', 'policy_rule').
         title: Human-readable document title.
         content: Full document text used for RAG context assembly.
-        embedding: 384-dimensional sentence-transformer embedding vector.
+        embedding: 1024-dimensional embedding vector (Ollama mxbai-embed-large).
         doc_metadata: Extensible JSONB bag for arbitrary document attributes.
         created_at: UTC timestamp of first ingestion.
         updated_at: UTC timestamp of last update (set on upsert).
@@ -79,7 +79,7 @@ class RagDocumentDB(Base):
     category: Column = Column(String(100), nullable=False)
     title: Column = Column(String(255), nullable=False)
     content: Column = Column(Text, nullable=False)
-    embedding: Column = Column(Vector(384), nullable=False)
+    embedding: Column = Column(Vector(1024), nullable=False)
     doc_metadata: Column = Column("metadata", JSONB, nullable=True, default={})
     created_at: Column = Column(TIMESTAMP(timezone=True), nullable=True)
     updated_at: Column = Column(TIMESTAMP(timezone=True), nullable=True)
