@@ -236,7 +236,7 @@ export default function DashboardPanel() {
             <h2 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">
               Analytics
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[0.8fr_1.2fr_1.5fr] gap-2.5">
 
               {/* Row 1, Col 1 — Consensus */}
               <ChartCard
@@ -304,25 +304,25 @@ export default function DashboardPanel() {
                   <p className="text-[10px] text-muted-foreground text-center py-4">No data yet</p>
                 ) : (
                   <>
-                    <ResponsiveContainer width="100%" height={shapSlice.length * 32 + 40}>
+                    <ResponsiveContainer width="100%" height={shapSlice.length * 44 + 50}>
                       <BarChart
                         data={shapSlice}
                         layout="vertical"
-                        margin={{ left: 0, right: 10, top: 5, bottom: 10 }}
+                        margin={{ left: 0, right: 20, top: 5, bottom: 15 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
                         <XAxis
                           type="number"
-                          tick={{ fontSize: 9 }}
+                          tick={{ fontSize: 10 }}
                           axisLine={false}
                           tickLine={false}
-                          label={{ value: "Mean |SHAP value|", position: "bottom", offset: -2, style: { fontSize: 9, fill: "#888" } }}
+                          label={{ value: "Mean |SHAP value|", position: "bottom", offset: -2, style: { fontSize: 10, fill: "#888" } }}
                         />
                         <YAxis
                           type="category"
                           dataKey="feature"
-                          tick={{ fontSize: 10 }}
-                          width={110}
+                          tick={{ fontSize: 11 }}
+                          width={130}
                           axisLine={false}
                           tickLine={false}
                         />
@@ -450,13 +450,13 @@ function KpiTile({
   return (
     <Card className="transition-shadow duration-200 hover:shadow-md">
       <CardHeader className="flex flex-row items-center justify-between pb-0 pt-2.5 px-3">
-        <CardTitle className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
+        <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
           {label}
         </CardTitle>
         {icon}
       </CardHeader>
       <CardContent className="px-3 pb-2.5 pt-0">
-        <p className={`text-xl font-bold tabular-nums leading-tight ${colorClass}`}>{value}</p>
+        <p className={`text-2xl font-bold tabular-nums leading-tight ${colorClass}`}>{value}</p>
         {subtitle && (
           <p className="text-[10px] text-muted-foreground mt-0.5">{subtitle}</p>
         )}
