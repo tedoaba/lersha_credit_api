@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useAnalytics } from "@/lib/queries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle, AlertTriangle, XCircle, Users, ShieldCheck, ShieldAlert } from "lucide-react";
+import { CheckCircle, AlertTriangle, XCircle, Users } from "lucide-react";
 import {
   PieChart,
   Pie,
@@ -94,7 +94,6 @@ export default function DashboardPanel() {
 
   // Model agreement rate
   const agreementCount = totalFarmers - consensusMixed;
-  const agreementRate = totalFarmers > 0 ? ((agreementCount / totalFarmers) * 100).toFixed(1) : "0";
   const agreementPieData = [
     { name: "Agreed", value: agreementCount },
     { name: "Mixed", value: consensusMixed },
@@ -146,10 +145,10 @@ export default function DashboardPanel() {
   const AgreementLegend = useMemo(() => renderPieLegend(AGREEMENT_COLORS), []);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {isLoading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          {[...Array(5)].map((_, i) => (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
             <Card key={i}>
               <CardContent className="pt-6">
                 <div className="h-8 bg-muted rounded animate-pulse" />
@@ -172,7 +171,7 @@ export default function DashboardPanel() {
             <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-4">
               Overview
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <KpiTile
                 label="Farmers Scored"
                 value={totalFarmers}
@@ -203,17 +202,6 @@ export default function DashboardPanel() {
                 icon={<XCircle className="h-4 w-4 text-red-500" />}
                 colorClass="text-red-600 dark:text-red-400"
               />
-              <KpiTile
-                label="Model Agreement"
-                value={`${agreementRate}%`}
-                subtitle={`${agreementCount} agreed, ${consensusMixed} mixed`}
-                icon={
-                  Number(agreementRate) >= 80
-                    ? <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                    : <ShieldAlert className="h-4 w-4 text-amber-500" />
-                }
-                colorClass={Number(agreementRate) >= 80 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}
-              />
             </div>
           </div>
 
@@ -235,14 +223,14 @@ export default function DashboardPanel() {
                   {pieData.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-8">No data yet</p>
                   ) : (
-                    <ResponsiveContainer width="100%" height={360}>
+                    <ResponsiveContainer width="100%" height={220}>
                       <PieChart>
                         <Pie
                           data={pieData}
                           cx="50%"
                           cy="50%"
-                          innerRadius={80}
-                          outerRadius={130}
+                          innerRadius={50}
+                          outerRadius={85}
                           dataKey="value"
                           paddingAngle={2}
                           label={({ name, percent }) =>
@@ -282,7 +270,7 @@ export default function DashboardPanel() {
                   {genderData.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-8">No data yet</p>
                   ) : (
-                    <ResponsiveContainer width="100%" height={360}>
+                    <ResponsiveContainer width="100%" height={220}>
                       <BarChart data={genderData}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis dataKey="gender" tick={{ fontSize: 12 }} />
@@ -315,14 +303,14 @@ export default function DashboardPanel() {
                   </p>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={360}>
+                  <ResponsiveContainer width="100%" height={220}>
                     <PieChart>
                       <Pie
                         data={agreementPieData}
                         cx="50%"
                         cy="50%"
-                        innerRadius={80}
-                        outerRadius={130}
+                        innerRadius={50}
+                        outerRadius={85}
                         dataKey="value"
                         paddingAngle={2}
                         label={({ name, percent }) =>
@@ -359,7 +347,7 @@ export default function DashboardPanel() {
                     <p className="text-sm text-muted-foreground text-center py-8">No data yet</p>
                   ) : (
                     <>
-                      <ResponsiveContainer width="100%" height={330}>
+                      <ResponsiveContainer width="100%" height={220}>
                         <BarChart data={confidenceData}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} />
                           <XAxis dataKey="range" tick={{ fontSize: 10 }} />
@@ -399,7 +387,7 @@ export default function DashboardPanel() {
                   </p>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={360}>
+                  <ResponsiveContainer width="100%" height={220}>
                     <BarChart data={comparisonData}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} />
                       <XAxis dataKey="decision" tick={{ fontSize: 11 }} />
@@ -437,11 +425,11 @@ export default function DashboardPanel() {
                   <p className="text-sm text-muted-foreground text-center py-8">No data yet</p>
                 ) : (
                   <>
-                    <ResponsiveContainer width="100%" height={600}>
+                    <ResponsiveContainer width="100%" height={360}>
                       <BarChart
                         data={topRiskFactors.slice(0, 12)}
                         layout="vertical"
-                        margin={{ left: 10, right: 30, top: 10, bottom: 30 }}
+                        margin={{ left: 10, right: 20, top: 5, bottom: 20 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                         <XAxis
@@ -453,7 +441,7 @@ export default function DashboardPanel() {
                           type="category"
                           dataKey="feature"
                           tick={{ fontSize: 12 }}
-                          width={200}
+                          width={150}
                         />
                         <Tooltip
                           cursor={false}
