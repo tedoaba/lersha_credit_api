@@ -80,6 +80,8 @@ def run_inferences(
     selected_data,
     feature_column: str,
     target_column: str,
+    *,
+    job_id: str | None = None,
 ) -> dict:
     """Run end-to-end inference for all rows in ``selected_data``.
 
@@ -157,7 +159,7 @@ def run_inferences(
                 }
             )
 
-        save_batch_evaluations(original_data, evaluation_results)
+        save_batch_evaluations(original_data, evaluation_results, job_id=job_id)
         logger.info("Inference complete — model: %s, records: %d", model_name, len(selected_data))
 
         return {

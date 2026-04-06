@@ -101,6 +101,7 @@ def run_inference_task(job_id: str, payload: dict) -> None:
                 selected_data=selected_data,
                 feature_column=config.feature_column_36,
                 target_column=config.target_column_36,
+                job_id=job_id,
             )
             result[f"result_{model_name}"] = model_result
 
