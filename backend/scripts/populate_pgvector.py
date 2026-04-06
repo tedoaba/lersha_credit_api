@@ -1,8 +1,18 @@
 """pgvector Knowledge Base Population Script.
 
-Migrates all feature-definition documents from the inline FEATURE_DEFINITIONS
-catalogue into the rag_documents PostgreSQL table using batch upserts via
-pgvector-compatible embeddings.
+Ingests two document sources into the rag_documents PostgreSQL table:
+
+1. **Feature definitions** (inline catalogue) — 34 terse ML feature descriptions
+   (category: ``feature_definition``).
+2. **Domain knowledge** (markdown files) — rich context from
+   ``backend/data/rag-data/`` covering data point methodology, crop reference
+   data, survey mappings, and eligibility decision framework
+   (category: ``domain_knowledge``).
+
+Markdown files are split into section-based chunks (one chunk per ``## ``
+heading) to stay within the sentence-transformer embedding sweet spot
+(~256 tokens).  Each chunk is assigned a stable UUID5 doc_id for idempotent
+upserts.
 
 This script replaces backend/scripts/populate_chroma.py (archived to
 backup/scripts/populate_chroma.py) as part of 006-migrate-chroma-pgvector.
@@ -14,29 +24,26 @@ Prerequisites:
     - PostgreSQL running with pgvector extension enabled (migration 003 applied)
     - DB_URI environment variable pointing to a live database
     - Sentence-transformers model cached locally (all-MiniLM-L6-v2)
-
-Expected output:
-    [INFO] Starting pgvector knowledge base population...
-    [INFO] Loading sentence-transformer model 'all-MiniLM-L6-v2'...
-    [INFO] Model loaded. Starting embedding and ingestion for 34 documents...
-    [OK]   Batch 1/1 — ingested 34 documents.
-    [OK]   Ingested 34 documents in 1 batch(es). Failures: 0.
 """
 
 from __future__ import annotations
 
+import re
 import sys
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 
-from sentence_transformers import SentenceTransformer
+import httpx
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from backend.config.config import config
+from backend.config.config import BASE_DIR, config
 from backend.services.db_model import RagDocumentDB
 from backend.services.db_utils import db_engine
+
+RAG_DATA_DIR = BASE_DIR / "backend" / "data" / "rag-data"
 
 # ── Document catalogue ─────────────────────────────────────────────────────────
 # Source: migrated from populate_chroma.py FEATURE_DEFINITIONS list.
@@ -146,12 +153,124 @@ FEATURE_DEFINITIONS: list[tuple[str, str, str]] = [
     ("decision", "Target label: Eligible, Review, or Not Eligible.", "feature_definition"),
 ]
 
+# ── Markdown chunking ─────────────────────────────────────────────────────────
+
+_H2_SPLIT = re.compile(r"(?=^## )", re.MULTILINE)
+
+
+def chunk_markdown(filepath: Path, base_dir: Path) -> list[tuple[str, str, str, str]]:
+    """Split a markdown file into section-based chunks.
+
+    Each chunk gets the H1 title prepended for context.  Empty sections
+    (heading only, no body text) are skipped.
+
+    Returns:
+        List of ``(doc_id_seed, title, content, category)`` tuples.
+    """
+    text = filepath.read_text(encoding="utf-8")
+    relative = filepath.relative_to(base_dir).as_posix()
+
+    # Extract H1 title (first line starting with "# ")
+    h1_match = re.match(r"^#\s+(.+)", text)
+    h1_title = h1_match.group(1).strip() if h1_match else filepath.stem.replace("-", " ").title()
+
+    sections = _H2_SPLIT.split(text)
+    chunks: list[tuple[str, str, str, str]] = []
+
+    for section in sections:
+        section = section.strip()
+        if not section:
+            continue
+
+        # Extract section heading
+        heading_match = re.match(r"^##\s+(.+)", section)
+        if heading_match:
+            heading = heading_match.group(1).strip()
+            body = section[heading_match.end() :].strip()
+        else:
+            # Preamble before any H2 (contains H1 + intro text)
+            heading = "Introduction"
+            body = section
+
+        if not body:
+            continue
+
+        # Prepend H1 title for context
+        chunk_content = f"{h1_title} — {heading}\n\n{body}"
+        doc_id_seed = f"lersha.rag.md.{relative}#{heading}"
+        title = f"{h1_title} > {heading}"
+
+        chunks.append((doc_id_seed, title, chunk_content, "domain_knowledge"))
+
+    return chunks
+
+
+def load_markdown_documents(rag_dir: Path) -> list[tuple[str, str, str, str]]:
+    """Walk ``rag_dir`` and chunk all ``.md`` files.
+
+    Returns:
+        List of ``(doc_id_seed, title, content, category)`` tuples.
+    """
+    all_chunks: list[tuple[str, str, str, str]] = []
+    md_files = sorted(rag_dir.rglob("*.md"))
+
+    for md_file in md_files:
+        all_chunks.extend(chunk_markdown(md_file, rag_dir))
+
+    return all_chunks
+
+
 # ── Ingestion configuration ────────────────────────────────────────────────────
 BATCH_SIZE = 1_000  # Rows per INSERT batch — safe for all typical corpus sizes
 
 
+def _upsert_documents(
+    engine: object,
+    documents: list[dict],
+    batch_size: int,
+    label: str,
+) -> tuple[int, int]:
+    """Batch-upsert ``documents`` into rag_documents.
+
+    Returns:
+        ``(successes, failures)`` counts.
+    """
+    successes = 0
+    failures = 0
+
+    for n_batch, batch_start in enumerate(range(0, len(documents), batch_size), 1):
+        batch = documents[batch_start : batch_start + batch_size]
+        batch_label = f"{label} batch {n_batch}"
+
+        try:
+            with Session(engine) as session:
+                stmt = pg_insert(RagDocumentDB.__table__).values(batch)
+                upsert_stmt = stmt.on_conflict_do_update(
+                    index_elements=["doc_id"],
+                    set_={
+                        "content": stmt.excluded.content,
+                        "embedding": stmt.excluded.embedding,
+                        "metadata": stmt.excluded["metadata"],
+                        "updated_at": stmt.excluded.updated_at,
+                    },
+                )
+                session.execute(upsert_stmt)
+                session.commit()
+                successes += len(batch)
+                print(f"[OK]   {batch_label} — ingested {len(batch)} documents.")  # noqa: T201
+        except SQLAlchemyError as exc:
+            failures += 1
+            print(f"[ERROR] {batch_label} failed: {exc}", file=sys.stderr)  # noqa: T201
+
+    return successes, failures
+
+
 def populate_pgvector(batch_size: int = BATCH_SIZE) -> int:
-    """Embed and upsert all FEATURE_DEFINITIONS into rag_documents.
+    """Embed and upsert feature definitions and domain knowledge into rag_documents.
+
+    Ingests two sources:
+    1. Inline ``FEATURE_DEFINITIONS`` (category: ``feature_definition``)
+    2. Markdown files from ``backend/data/rag-data/`` (category: ``domain_knowledge``)
 
     Uses ``INSERT ... ON CONFLICT (doc_id) DO UPDATE`` so the script is
     fully idempotent — re-running it does not create duplicate rows.
@@ -166,75 +285,103 @@ def populate_pgvector(batch_size: int = BATCH_SIZE) -> int:
         SystemExit: Exits with code 1 if any batch fails to insert.
     """
     print("[INFO] Starting pgvector knowledge base population...")  # noqa: T201
-    print(f"[INFO] Loading sentence-transformer model '{config.embedder_model}'...")  # noqa: T201
+    print(f"[INFO] Using Ollama embedder '{config.embedder_model}' at {config.ollama_host}...")  # noqa: T201
 
-    # Load model ONCE outside the loop to avoid repeated HuggingFace cache hits
-    embedder = SentenceTransformer(config.embedder_model)
-    total_docs = len(FEATURE_DEFINITIONS)
+    ollama = httpx.Client(base_url=config.ollama_host, timeout=120.0)
 
-    print(f"[INFO] Model loaded. Starting embedding and ingestion for {total_docs} documents...")  # noqa: T201
+    # max_chars = 2000  # Safe limit for mxbai-embed-large (512-token context)
 
-    # Pre-compute all embeddings in a single batch call (most efficient)
-    contents = [defn for _, defn, _ in FEATURE_DEFINITIONS]
-    all_embeddings = embedder.encode(contents, show_progress_bar=False).tolist()
+    def _embed_batch(texts: list[str]) -> list[list[float]]:
+        """Embed texts via Ollama /api/embed, one at a time.
+
+        Truncates each text to ``max_chars`` characters to stay within
+        the embedding model's context window.
+        """
+        all_embs: list[list[float]] = []
+        for text_item in texts:
+            resp = ollama.post(
+                "/api/embed",
+                json={
+                    "model": config.embedder_model,
+                    "input": [text_item],
+                    "options": {"num_ctx": 8192},
+                },
+            )
+            resp.raise_for_status()
+            all_embs.append(resp.json()["embeddings"][0])
+        return all_embs
+
+    # ── Source 1: Inline feature definitions ──────────────────────────────
+    feature_contents = [defn for _, defn, _ in FEATURE_DEFINITIONS]
+
+    # ── Source 2: Markdown domain knowledge ───────────────────────────────
+    md_chunks = load_markdown_documents(RAG_DATA_DIR)
+    md_contents = [content for _, _, content, _ in md_chunks]
+
+    total_docs = len(FEATURE_DEFINITIONS) + len(md_chunks)
+    print(  # noqa: T201
+        f"[INFO] Embedding {len(FEATURE_DEFINITIONS)} feature definitions "
+        f"+ {len(md_chunks)} domain knowledge chunks ({total_docs} total)..."
+    )
+
+    # Pre-compute all embeddings via Ollama (batch call)
+    all_contents = feature_contents + md_contents
+    all_embeddings = _embed_batch(all_contents)
+
+    feature_embeddings = all_embeddings[: len(FEATURE_DEFINITIONS)]
+    md_embeddings = all_embeddings[len(FEATURE_DEFINITIONS) :]
 
     engine = db_engine()
     now = datetime.now(UTC)
-    successes = 0
-    failures = 0
-    n_batches = 0
 
-    # Chunk documents into batches
-    for batch_start in range(0, total_docs, batch_size):
-        batch_slice = FEATURE_DEFINITIONS[batch_start : batch_start + batch_size]
-        batch_embeddings = all_embeddings[batch_start : batch_start + batch_size]
-        n_batches += 1
-        batch_label = f"Batch {n_batches}"
+    # Build feature definition rows
+    feature_rows = []
+    for (feature_name, content, category), embedding in zip(FEATURE_DEFINITIONS, feature_embeddings, strict=False):
+        feature_rows.append(
+            {
+                "doc_id": uuid.uuid5(uuid.NAMESPACE_DNS, f"lersha.rag.{feature_name}"),
+                "category": category,
+                "title": feature_name.replace("_", " ").title(),
+                "content": content,
+                "embedding": embedding,
+                "metadata": {"feature_name": feature_name},
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
 
-        rows = []
-        for (feature_name, content, category), embedding in zip(batch_slice, batch_embeddings, strict=False):
-            rows.append(
-                {
-                    "doc_id": uuid.uuid5(uuid.NAMESPACE_DNS, f"lersha.rag.{feature_name}"),
-                    "category": category,
-                    "title": feature_name.replace("_", " ").title(),
-                    "content": content,
-                    "embedding": embedding,
-                    "metadata": {"feature_name": feature_name},
-                    "created_at": now,
-                    "updated_at": now,
-                }
-            )
+    # Build domain knowledge rows
+    md_rows = []
+    for (doc_id_seed, title, content, category), embedding in zip(md_chunks, md_embeddings, strict=False):
+        md_rows.append(
+            {
+                "doc_id": uuid.uuid5(uuid.NAMESPACE_DNS, doc_id_seed),
+                "category": category,
+                "title": title,
+                "content": content,
+                "embedding": embedding,
+                "metadata": {"source": "rag-data-markdown"},
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
 
-        try:
-            with Session(engine) as session:
-                stmt = pg_insert(RagDocumentDB.__table__).values(rows)
-                upsert_stmt = stmt.on_conflict_do_update(
-                    index_elements=["doc_id"],
-                    set_={
-                        "content": stmt.excluded.content,
-                        "embedding": stmt.excluded.embedding,
-                        "metadata": stmt.excluded["metadata"],
-                        "updated_at": stmt.excluded.updated_at,
-                    },
-                )
-                session.execute(upsert_stmt)
-                session.commit()
-                successes += len(rows)
-                print(f"[OK]   {batch_label} — ingested {len(rows)} documents.")  # noqa: T201
-        except SQLAlchemyError as exc:
-            failures += 1
-            print(f"[ERROR] {batch_label} failed: {exc}", file=sys.stderr)  # noqa: T201
+    # Upsert both sources
+    feat_ok, feat_fail = _upsert_documents(engine, feature_rows, batch_size, "Feature definitions")
+    md_ok, md_fail = _upsert_documents(engine, md_rows, batch_size, "Domain knowledge")
 
-    total_batches = n_batches - failures
+    total_ok = feat_ok + md_ok
+    total_fail = feat_fail + md_fail
     print(  # noqa: T201
-        f"[OK]   Ingested {successes} documents in {total_batches} batch(es). Failures: {failures}."
+        f"[OK]   Ingested {total_ok} documents "
+        f"({feat_ok} feature_definition + {md_ok} domain_knowledge). "
+        f"Failures: {total_fail}."
     )
 
-    if failures > 0:
+    if total_fail > 0:
         sys.exit(1)
 
-    return successes
+    return total_ok
 
 
 if __name__ == "__main__":
