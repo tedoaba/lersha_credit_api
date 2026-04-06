@@ -146,7 +146,10 @@ class RagService:
         # Load embedder once per service instance — avoids ~30 s startup penalty
         # on the first request.  The model name is read from config.
         self._embedder = SentenceTransformer(self._config.embedder_model)
-        self._gemini = GeminiClient(api_key=self._config.gemini_api_key)
+        self._gemini = GeminiClient(
+            api_key=self._config.gemini_api_key,
+            http_options={"timeout": 15_000},  # 15-second timeout per request
+        )
         logger.debug(
             "RagService initialised (prompt_version=%s, embedder=%s)",
             self._config.prompt_version,
@@ -452,17 +455,27 @@ class RagService:
         ]
         return "\n\n".join(parts)
 
+    # ── Circuit breaker state ────────────────────────────────────────────────
+    # Tracks consecutive Gemini failures. After _CB_FAIL_THRESHOLD failures,
+    # the breaker opens and returns a fallback for _CB_RESET_SECONDS before
+    # allowing a retry. This prevents cascading timeouts and Gemini cost spikes.
+    _cb_failures: int = 0
+    _cb_open_until: float = 0.0
+    _CB_FAIL_THRESHOLD: int = 5
+    _CB_RESET_SECONDS: float = 60.0
+    _CB_FALLBACK: str = "Credit explanation temporarily unavailable. The prediction and risk factors above remain valid."
+
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
         reraise=True,
     )
     def _call_gemini(self, prompt: str) -> str:
-        """Call the Gemini API and extract the generated text.
+        """Call the Gemini API with circuit breaker protection.
 
-        Retried up to 3 times with exponential back-off (2–10 s).  If all
-        attempts fail the original exception is re-raised so the caller can
-        convert it to a 503 response.
+        Retried up to 3 times with exponential back-off (2-10 s). If the
+        circuit breaker is open (5+ consecutive failures), returns a fallback
+        explanation without calling Gemini until the reset window passes.
 
         Args:
             prompt: Fully assembled prompt string.
@@ -470,27 +483,47 @@ class RagService:
         Returns:
             Stripped explanation text from the model response.
         """
+        # Circuit breaker: check if open
+        if self._cb_failures >= self._CB_FAIL_THRESHOLD:
+            if time.time() < self._cb_open_until:
+                logger.warning("Gemini circuit breaker OPEN — returning fallback (%d consecutive failures)", self._cb_failures)
+                return self._CB_FALLBACK
+            # Reset window passed — allow one attempt (half-open)
+            logger.info("Gemini circuit breaker half-open — attempting recovery")
+
         model_id = self._config.gemini_model_id
         if model_id is None:
             raise ValueError("GEMINI_MODEL must be set in config")
-        t0 = time.perf_counter()
-        response = self._gemini.models.generate_content(
-            model=model_id,
-            contents=prompt,
-        )
-        elapsed = int((time.perf_counter() - t0) * 1000)
-        logger.debug("Gemini call completed in %d ms", elapsed)
 
-        if hasattr(response, "text") and response.text:
-            return response.text.strip()
-        candidates = getattr(response, "candidates", None) or []
-        if candidates:
-            parts = getattr(candidates[0].content, "parts", None) or []
-            if parts:
-                text_val = getattr(parts[0], "text", None)
-                if text_val:
-                    return str(text_val).strip()
-        return str(response).strip()
+        try:
+            t0 = time.perf_counter()
+            response = self._gemini.models.generate_content(
+                model=model_id,
+                contents=prompt,
+            )
+            elapsed = int((time.perf_counter() - t0) * 1000)
+            logger.debug("Gemini call completed in %d ms", elapsed)
+
+            # Success — reset circuit breaker
+            if self._cb_failures > 0:
+                logger.info("Gemini circuit breaker CLOSED — recovered after %d failures", self._cb_failures)
+            self._cb_failures = 0
+
+            if hasattr(response, "text") and response.text:
+                return response.text.strip()
+            candidates = getattr(response, "candidates", None) or []
+            if candidates:
+                parts = getattr(candidates[0].content, "parts", None) or []
+                if parts:
+                    text_val = getattr(parts[0], "text", None)
+                    if text_val:
+                        return str(text_val).strip()
+            return str(response).strip()
+        except Exception:
+            self._cb_failures += 1
+            self._cb_open_until = time.time() + self._CB_RESET_SECONDS
+            logger.error("Gemini call failed (%d consecutive failures)", self._cb_failures, exc_info=True)
+            raise
 
     def _write_audit(
         self,

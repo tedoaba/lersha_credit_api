@@ -1,5 +1,12 @@
 """RAG explanation engine using PostgreSQL pgvector and Google Gemini.
 
+.. deprecated::
+    This module is superseded by :class:`backend.chat.rag_service.RagService`
+    which adds Redis caching, circuit breaker, versioned prompts, and proper
+    audit trail with job_id. New callers should use ``RagService.explain()``.
+    This module is kept only for backward compatibility with the inference
+    pipeline (``backend.core.pipeline.run_inferences``).
+
 Migrated in 006-migrate-chroma-pgvector (2026-04-01):
   - Replaced ChromaDB PersistentClient with pgvector SQL queries via SQLAlchemy.
   - retrieve_docs() now executes a parameterised cosine-distance SELECT and
@@ -18,6 +25,7 @@ from __future__ import annotations
 
 import json
 import time
+import uuid as _uuid
 from pathlib import Path
 
 import yaml
@@ -42,7 +50,10 @@ logger = get_logger(__name__)
 _embedder: SentenceTransformer = SentenceTransformer(config.embedder_model)
 
 # ── Gemini client ──────────────────────────────────────────────────────────────
-gemini_client = GeminiClient(api_key=config.gemini_api_key)
+gemini_client = GeminiClient(
+    api_key=config.gemini_api_key,
+    http_options={"timeout": 15_000},  # 15-second timeout per request
+)
 
 # ── SQL template for cosine-distance retrieval ─────────────────────────────────
 # Parameters:
@@ -136,12 +147,20 @@ def retrieve_docs(
     # ── Audit log write ────────────────────────────────────────────────────────
     retrieved_ids = [r[0] for r in results]
     try:
+        job_uuid = None
+        if job_id:
+            try:
+                job_uuid = _uuid.UUID(job_id)
+            except ValueError:
+                logger.warning("Invalid job_id UUID format: %s", job_id)
+
         with Session(engine) as audit_session:
             audit_row = RagAuditLogDB(
                 query_text=query,
                 retrieved_ids=retrieved_ids,
                 prediction=prediction,
                 model_name=model_name,
+                job_id=job_uuid,
                 latency_ms=elapsed_ms,
             )
             audit_session.add(audit_row)
