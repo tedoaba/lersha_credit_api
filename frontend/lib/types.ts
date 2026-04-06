@@ -59,6 +59,8 @@ export interface EvaluationRecord {
   top_feature_contributions: FeatureContribution[];
   rag_explanation: string;
   model_name: string;
+  class_probabilities: Record<string, number> | null;
+  confidence_score: number | null;
 }
 
 export interface ModelResult {
@@ -88,6 +90,8 @@ export interface ResultsRecord {
   top_feature_contributions: FeatureContribution[];
   rag_explanation: string;
   model_name: string;
+  class_probabilities: Record<string, number> | null;
+  confidence_score: number | null;
   timestamp: string | null; // ISO 8601
   gender: string | null;
 }
