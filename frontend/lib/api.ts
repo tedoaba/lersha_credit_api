@@ -47,11 +47,6 @@ export class LershaClient {
     return res.json() as Promise<T>;
   }
 
-  /** GET /api/health */
-  async health(): Promise<{ status: string }> {
-    return this.request("/api/health");
-  }
-
   /** POST /api/predict → 202 Accepted */
   async submitPrediction(payload: PredictRequest): Promise<JobAcceptedResponse> {
     return this.request<JobAcceptedResponse>("/api/predict", {
