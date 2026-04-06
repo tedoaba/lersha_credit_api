@@ -94,17 +94,26 @@ def run_inference_task(job_id: str, payload: dict) -> None:
 
         active_models: list[str] = config.hyperparams.get("models", {}).get("active", ["xgboost", "random_forest"])
         result: dict = {}
+        farmer_uid = payload.get("farmer_uid")
 
-        for model_name in active_models:
-            model_result = run_inferences(
-                model_name=model_name,
+        def _run_single_model(mn: str) -> tuple[str, dict]:
+            return mn, run_inferences(
+                model_name=mn,
                 original_data=original_data,
                 selected_data=selected_data,
                 feature_column=config.feature_column_36,
                 target_column=config.target_column_36,
                 job_id=job_id,
+                farmer_uid=farmer_uid,
             )
-            result[f"result_{model_name}"] = model_result
+
+        from concurrent.futures import ThreadPoolExecutor, as_completed  # noqa: PLC0415
+
+        with ThreadPoolExecutor(max_workers=len(active_models)) as pool:
+            futures = {pool.submit(_run_single_model, mn): mn for mn in active_models}
+            for future in as_completed(futures):
+                mn, model_result = future.result()
+                result[f"result_{mn}"] = model_result
 
         db_utils.update_job_result(job_id, result)
         logger.info("Job '%s' completed successfully", job_id)

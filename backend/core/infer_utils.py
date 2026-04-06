@@ -12,6 +12,7 @@ Dead code removed in monorepo refactor (2026-03-29):
 
 import contextlib
 import json
+from functools import lru_cache
 
 import joblib
 import matplotlib
@@ -48,13 +49,47 @@ def get_candidate_data(df: pd.DataFrame, columns_to_select: list) -> pd.DataFram
     return sample_data
 
 
-def load_prediction_models(model_name: str) -> object:
-    """Load a trained prediction model by name.
+@lru_cache(maxsize=4)
+def _load_model_from_disk(model_name: str) -> object:
+    """Load a model from MLflow registry or local pkl (cached per worker process).
 
-    Attempts to load from the MLflow Model Registry first
-    (``models:/lersha-{model_name}/Production``). If the registry is
-    unreachable or the model has not yet been promoted to Production stage,
-    falls back to loading from the configured local ``.pkl`` path.
+    The result is cached so subsequent calls for the same ``model_name``
+    return the already-loaded object without disk I/O or network calls.
+    """
+    pkl_path_map: dict[str, str] = {
+        "xgboost": config.xgb_model_36,
+        "random_forest": config.rf_model_36,
+        "catboost": config.cab_model_36,
+    }
+
+    # 1. Try MLflow Model Registry
+    registry_uri = f"models:/lersha-{model_name}/Production"
+    try:
+        model = mlflow.sklearn.load_model(registry_uri)
+        logger.info("Model '%s' loaded from MLflow registry (%s)", model_name, registry_uri)
+        return model
+    except Exception as exc:  # noqa: BLE001 — intentional broad catch for registry fallback
+        logger.warning(
+            "MLflow registry unavailable for '%s' (%s); falling back to local pkl.",
+            model_name,
+            exc,
+        )
+
+    # 2. Fallback: load from local .pkl file
+    pkl_path = pkl_path_map[model_name]
+    try:
+        model = joblib.load(pkl_path)
+        logger.info("Model '%s' loaded from local pkl: %s", model_name, pkl_path)
+        return model
+    except Exception as exc:
+        logger.error("Failed to load model '%s' from local pkl '%s'", model_name, pkl_path, exc_info=True)
+        raise RuntimeError(
+            f"Failed to load model '{model_name}' from both MLflow registry and local pkl '{pkl_path}'"
+        ) from exc
+
+
+def load_prediction_models(model_name: str) -> object:
+    """Load a trained prediction model by name (cached after first load).
 
     Supported model names: ``"xgboost"``, ``"random_forest"``, ``"catboost"``.
 
@@ -68,41 +103,12 @@ def load_prediction_models(model_name: str) -> object:
         ValueError: If ``model_name`` is not recognised.
         RuntimeError: If both the registry and the local ``.pkl`` fail to load.
     """
-    pkl_path_map: dict[str, str] = {
-        "xgboost": config.xgb_model_36,
-        "random_forest": config.rf_model_36,
-        "catboost": config.cab_model_36,
-    }
-
-    if model_name not in pkl_path_map:
+    if model_name not in ("xgboost", "random_forest", "catboost"):
         raise ValueError(f"Unknown model_name '{model_name}'. Expected: xgboost | random_forest | catboost")
 
-    # ── 1. Try MLflow Model Registry ──────────────────────────────────────────
-    registry_uri = f"models:/lersha-{model_name}/Production"
-    try:
-        model = mlflow.sklearn.load_model(registry_uri)
-        mlflow.set_tag("model_source", f"registry:{registry_uri}")
-        logger.info("Model '%s' loaded from MLflow registry (%s)", model_name, registry_uri)
-        return model
-    except Exception as exc:  # noqa: BLE001 — intentional broad catch for registry fallback
-        logger.warning(
-            "MLflow registry unavailable for '%s' (%s); falling back to local pkl.",
-            model_name,
-            exc,
-        )
-
-    # ── 2. Fallback: load from local .pkl file ────────────────────────────────
-    pkl_path = pkl_path_map[model_name]
-    try:
-        model = joblib.load(pkl_path)
-        mlflow.set_tag("model_source", f"local:{pkl_path}")
-        logger.info("Model '%s' loaded from local pkl: %s", model_name, pkl_path)
-        return model
-    except Exception as exc:
-        logger.error("Failed to load model '%s' from local pkl '%s'", model_name, pkl_path, exc_info=True)
-        raise RuntimeError(
-            f"Failed to load model '{model_name}' from both MLflow registry and local pkl '{pkl_path}'"
-        ) from exc
+    model = _load_model_from_disk(model_name)
+    mlflow.set_tag("model_source", f"cached:{model_name}")
+    return model
 
 
 def predict_single_sample_data(model, sample_data: pd.DataFrame, target_column: str, model_name: str):
@@ -144,9 +150,7 @@ def predict_single_sample_data(model, sample_data: pd.DataFrame, target_column: 
         elif hasattr(model, "named_steps") and hasattr(model.named_steps.get("model", None), "predict_proba"):
             from sklearn.pipeline import Pipeline as SkPipeline
 
-            preprocess_steps = [
-                (name, step) for name, step in model.named_steps.items() if name != "model"
-            ]
+            preprocess_steps = [(name, step) for name, step in model.named_steps.items() if name != "model"]
             preprocess_pipeline = SkPipeline(preprocess_steps)
             X_transformed = preprocess_pipeline.transform(sample_data)
             proba = model.named_steps["model"].predict_proba(X_transformed)
@@ -167,7 +171,10 @@ def predict_single_sample_data(model, sample_data: pd.DataFrame, target_column: 
 
     logger.info(
         "Prediction: index=%d, class=%s, confidence=%.3f (model=%s)",
-        prediction_class_index, prediction_class_name, confidence_score, model_name,
+        prediction_class_index,
+        prediction_class_name,
+        confidence_score,
+        model_name,
     )
     return prediction_class_index, prediction_class_name, class_probabilities, confidence_score
 
@@ -234,6 +241,9 @@ def build_contribution_table(sample_data: pd.DataFrame, shap_values, pred_class_
     )
 
 
+_explainer_cache: dict[str, shap.TreeExplainer] = {}
+
+
 def generate_shap_value_summary_plots(model, X_shap, feature_names: list, model_name: str):
     """Compute SHAP values and save summary plots + JSON per class.
 
@@ -247,7 +257,9 @@ def generate_shap_value_summary_plots(model, X_shap, feature_names: list, model_
         tuple: ``(explainer, shap_per_class)`` where ``shap_per_class`` is a
         list of 2D ``np.ndarray`` with shape ``(num_samples, num_features)``.
     """
-    explainer = shap.TreeExplainer(model)
+    if model_name not in _explainer_cache:
+        _explainer_cache[model_name] = shap.TreeExplainer(model)
+    explainer = _explainer_cache[model_name]
     shap_sample = X_shap[: min(config.hyperparams.get("inference", {}).get("shap_max_samples", 100), X_shap.shape[0])]
 
     shap_values = explainer.shap_values(shap_sample)

@@ -165,7 +165,9 @@ def fetch_multiple_raw_data(
     Returns:
         pd.DataFrame: ``n_rows`` randomly sampled rows.
     """
-    logger.info("Fetching %d random rows from '%s' (gender=%s, age=%s-%s)", n_rows, table_name, gender, age_min, age_max)
+    logger.info(
+        "Fetching %d random rows from '%s' (gender=%s, age=%s-%s)", n_rows, table_name, gender, age_min, age_max
+    )
     engine = db_engine()
 
     where_clauses: list[str] = []
@@ -549,8 +551,7 @@ def get_analytics_summary() -> dict:
     farmer_table = config.farmer_data_all
 
     by_decision_sql = text(
-        "SELECT predicted_class_name, COUNT(*) as count "
-        "FROM candidate_result GROUP BY predicted_class_name"
+        "SELECT predicted_class_name, COUNT(*) as count FROM candidate_result GROUP BY predicted_class_name"
     )
     by_gender_decision_sql = text(
         f"SELECT COALESCE(fd.gender, 'Unknown') as gender, "  # noqa: S608
@@ -619,15 +620,16 @@ def get_analytics_summary() -> dict:
             b = int(row["bucket"])
             lo = b * 10
             hi = min((b + 1) * 10, 100)
-            confidence_distribution.append({
-                "range": f"{lo}-{hi}%",
-                "count": int(row["count"]),
-            })
+            confidence_distribution.append(
+                {
+                    "range": f"{lo}-{hi}%",
+                    "count": int(row["count"]),
+                }
+            )
 
         # Aggregate SHAP — top features by mean |SHAP value| across all predictions
         shap_sql = text(
-            "SELECT top_feature_contributions FROM candidate_result "
-            "WHERE top_feature_contributions IS NOT NULL"
+            "SELECT top_feature_contributions FROM candidate_result WHERE top_feature_contributions IS NOT NULL"
         )
         shap_df = pd.read_sql(shap_sql, conn)
         feature_totals: dict[str, list[float]] = {}
@@ -635,6 +637,7 @@ def get_analytics_summary() -> dict:
             contribs = row["top_feature_contributions"]
             if isinstance(contribs, str):
                 import json
+
                 contribs = json.loads(contribs)
             if not isinstance(contribs, list):
                 continue
@@ -648,12 +651,14 @@ def get_analytics_summary() -> dict:
             abs_vals = [abs(v) for v in values]
             mean_abs = sum(abs_vals) / len(abs_vals) if abs_vals else 0
             mean_val = sum(values) / len(values) if values else 0
-            top_risk_factors.append({
-                "feature": feat,
-                "mean_abs_shap": round(mean_abs, 4),
-                "direction": "increases_risk" if mean_val > 0 else "reduces_risk",
-                "count": len(values),
-            })
+            top_risk_factors.append(
+                {
+                    "feature": feat,
+                    "mean_abs_shap": round(mean_abs, 4),
+                    "direction": "increases_risk" if mean_val > 0 else "reduces_risk",
+                    "count": len(values),
+                }
+            )
         top_risk_factors.sort(key=lambda x: x["mean_abs_shap"], reverse=True)  # type: ignore[arg-type]
         top_risk_factors = top_risk_factors[:15]  # top 15
 
@@ -680,8 +685,7 @@ def get_recent_jobs(limit: int = 20) -> list[dict]:
     """
     engine = db_engine()
     query = text(
-        "SELECT job_id, status, error, created_at, completed_at "
-        "FROM inference_jobs ORDER BY created_at DESC LIMIT :lim"
+        "SELECT job_id, status, error, created_at, completed_at FROM inference_jobs ORDER BY created_at DESC LIMIT :lim"
     )
     with engine.connect() as conn:
         df = pd.read_sql(query, conn, params={"lim": limit})

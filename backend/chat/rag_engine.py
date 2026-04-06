@@ -44,6 +44,24 @@ logger = get_logger(__name__)
 # ── Ollama HTTP client ─────────────────────────────────────────────────────────
 _ollama_client = httpx.Client(base_url=config.ollama_host, timeout=120.0)
 
+# ── Cached prompt loader ─────────────────────────────────────────────────────
+_prompt_cache: dict | None = None
+
+
+def _load_prompt() -> dict:
+    """Load and cache the RAG prompt YAML (read from disk only once)."""
+    global _prompt_cache  # noqa: PLW0603
+    if _prompt_cache is not None:
+        return _prompt_cache
+    prompt_path = Path(config.prompt_path)
+    if not prompt_path.exists():
+        logger.warning("Prompt file not found at %s; using fallback prompt", config.prompt_path)
+        _prompt_cache = {"system": "You are a credit scoring analyst.", "instructions": "", "rules": "", "output": ""}
+    else:
+        with open(prompt_path, encoding="utf-8") as f:
+            _prompt_cache = yaml.safe_load(f)
+    return _prompt_cache
+
 
 def _ollama_embed(texts: str | list[str]) -> list[list[float]]:
     """Embed one or more texts via the Ollama /api/embed endpoint."""
@@ -251,18 +269,7 @@ def get_rag_explanation(
         "\n".join(doc for _, doc, _ in retrieved_docs) if retrieved_docs else "No relevant feature definitions found."
     )
 
-    prompt_path = Path(config.prompt_path)
-    if not prompt_path.exists():
-        logger.warning("Prompt file not found at %s; using fallback prompt", config.prompt_path)
-        rag_prompt: dict = {
-            "system": "You are a credit scoring analyst.",
-            "instructions": "",
-            "rules": "",
-            "output": "",
-        }
-    else:
-        with open(prompt_path, encoding="utf-8") as f:
-            rag_prompt = yaml.safe_load(f)
+    rag_prompt = _load_prompt()
 
     prompt = f"""
 SYSTEM:

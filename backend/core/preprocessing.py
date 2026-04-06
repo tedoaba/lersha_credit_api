@@ -9,6 +9,7 @@ Usage:
 """
 
 import pickle
+from functools import lru_cache
 from pathlib import Path
 
 import pandas as pd
@@ -18,8 +19,9 @@ from backend.logger.logger import get_logger
 logger = get_logger(__name__)
 
 
+@lru_cache(maxsize=8)
 def load_features(feature_path: str) -> list:
-    """Load a pickled list of feature names or label classes.
+    """Load a pickled list of feature names or label classes (cached).
 
     Args:
         feature_path: Absolute or relative path to a ``.pkl`` file containing

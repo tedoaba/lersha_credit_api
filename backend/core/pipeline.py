@@ -12,7 +12,7 @@ from datetime import datetime
 import mlflow
 from sklearn.pipeline import Pipeline as SkPipeline
 
-from backend.chat.rag_engine import get_rag_explanation
+from backend.chat.rag_service import RagService
 from backend.config.config import config
 from backend.core.feature_engineering import apply_feature_engineering
 from backend.core.infer_utils import (
@@ -27,6 +27,16 @@ from backend.logger.logger import get_logger
 from backend.services.db_utils import fetch_multiple_raw_data, fetch_raw_data, save_batch_evaluations
 
 logger = get_logger(__name__)
+
+# ── Lazy RagService singleton (initialised on first use inside the Celery worker) ──
+_rag_service: RagService | None = None
+
+
+def _get_rag_service() -> RagService:
+    global _rag_service  # noqa: PLW0603
+    if _rag_service is None:
+        _rag_service = RagService()
+    return _rag_service
 
 
 def match_inputs(
@@ -82,6 +92,7 @@ def run_inferences(
     target_column: str,
     *,
     job_id: str | None = None,
+    farmer_uid: str | None = None,
 ) -> dict:
     """Run end-to-end inference for all rows in ``selected_data``.
 
@@ -143,9 +154,17 @@ def run_inferences(
             top10_list = [{"feature": str(r["Feature"]), "value": float(r["SHAP Value"])} for _, r in top10.iterrows()]
             shap_dict = {r["Feature"]: float(r["SHAP Value"]) for _, r in top10.iterrows()}
 
-            # RAG explanation — FIXED: was a literal placeholder string "rag_explanation"
+            # RAG explanation via RagService (Redis-cached, circuit-breaker protected)
             try:
-                rag_explanation = get_rag_explanation(prediction_class_name, shap_dict, model_name=model_name)
+                uid = farmer_uid or str(original_data.iloc[idx].get(config.id_column, "unknown"))
+                rag_result = _get_rag_service().explain(
+                    prediction=prediction_class_name,
+                    shap_dict=shap_dict,
+                    farmer_uid=uid,
+                    job_id=job_id,
+                    model_name=model_name,
+                )
+                rag_explanation = rag_result.explanation
             except Exception as rag_exc:
                 logger.warning("RAG explanation failed for record %d: %s", idx, rag_exc)
                 rag_explanation = "[RAG unavailable]"
