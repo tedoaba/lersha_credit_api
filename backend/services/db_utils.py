@@ -16,6 +16,7 @@ Bug fixes applied in monorepo refactor (2026-03-29):
 from __future__ import annotations
 
 from datetime import datetime
+from functools import lru_cache
 from typing import Any
 
 import pandas as pd
@@ -30,15 +31,15 @@ from backend.services.schema import CreditScoringRecord
 logger = get_logger(__name__)
 
 
-# ── Engine factory ──────────────────────────────────────────────────────────
+# ── Engine factory (singleton per process) ──────────────────────────────────
 
 
-# TODO: Refactor to a module-level singleton via functools.lru_cache (or a
-# lazy-init _engine variable) so the connection pool is truly shared across
-# all calls within a worker process.  Currently each call creates a new engine
-# instance with its own pool, which limits pooling effectiveness under load.
+@lru_cache(maxsize=1)
 def db_engine():
-    """Create and return a pooled SQLAlchemy engine using ``config.db_uri``.
+    """Return a cached, pooled SQLAlchemy engine using ``config.db_uri``.
+
+    The ``@lru_cache`` decorator ensures a single engine instance (and its
+    connection pool) is shared across all calls within a worker process.
 
     Pool settings (PostgreSQL only — SQLite uses the default single-thread pool):
       pool_size=10      : up to 10 persistent connections per engine instance
@@ -47,7 +48,6 @@ def db_engine():
       pool_recycle=3600 : recycle connections after 1 hour to avoid stale sockets
     """
     uri = config.db_uri
-    # Pool settings only apply to PostgreSQL; SQLite (e.g. in tests) uses defaults
     if uri.startswith("postgresql"):
         return create_engine(
             uri,
@@ -509,7 +509,7 @@ def get_results_paginated(
         f"FROM candidate_result cr "
         f"LEFT JOIN {farmer_table} fd ON cr.farmer_uid = fd.farmer_uid "
         f"{where_sql} "
-        f"ORDER BY cr.timestamp DESC LIMIT :per_page OFFSET :offset"
+        f"ORDER BY cr.id DESC LIMIT :per_page OFFSET :offset"
     )
     params["per_page"] = per_page
     params["offset"] = offset
