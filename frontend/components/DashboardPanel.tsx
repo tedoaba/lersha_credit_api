@@ -18,13 +18,13 @@ import {
 } from "recharts";
 
 const DECISION_COLORS: Record<string, string> = {
-  Eligible: "#10b981",
-  Review: "#f59e0b",
-  "Not Eligible": "#ef4444",
-  Mixed: "#8b5cf6",
+  Eligible: "#2d8a4e",
+  Review: "#c9a84c",
+  "Not Eligible": "#dc3545",
+  Mixed: "#7c5cbf",
 };
 
-const MODEL_COLORS = ["#3b82f6", "#f97316", "#8b5cf6", "#06b6d4", "#ec4899"];
+const MODEL_COLORS = ["#2d8a4e", "#c9a84c", "#4caf50", "#8b6f3a", "#5a9e6f"];
 
 function formatModelName(name: string): string {
   return name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());

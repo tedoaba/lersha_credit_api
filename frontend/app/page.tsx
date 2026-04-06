@@ -17,11 +17,19 @@ export default function HomePage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Lersha Credit Scoring</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            AI-powered credit scoring for smallholder farmers.
-          </p>
+        <div className="flex items-center gap-4">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="https://lersha.com/wp-content/uploads/2023/09/lerlogo-1024x313.png"
+            alt="Lersha"
+            className="h-10 w-auto"
+          />
+          <div className="border-l pl-4 border-border">
+            <h1 className="text-lg font-semibold tracking-tight text-foreground">Credit Scoring</h1>
+            <p className="text-muted-foreground text-xs">
+              AI-powered evaluation for smallholder farmers
+            </p>
+          </div>
         </div>
         <Link
           href="/settings"
