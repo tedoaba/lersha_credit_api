@@ -3,7 +3,7 @@
 # Merge with base:  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 #
 # What this file adds / changes vs. the base:
-#   - caddy:     TLS termination (/ → frontend:3000, /v1/* → backend:8000, /mlflow → mlflow:5000)
+#   - caddy:     TLS termination (/ → frontend:3007, /v1/* → backend:8006, /mlflow → mlflow:5000)
 #   - postgres:  env vars for production credentials
 #   - backend:   Gunicorn (4 workers) + Alembic migrations on start
 #   - worker:    Celery 4 concurrency, Docker secrets mounted
@@ -57,7 +57,7 @@ services:
              uv run gunicorn backend.main:app
              --workers 4
              --worker-class uvicorn.workers.UvicornWorker
-             --bind 0.0.0.0:8000
+             --bind 0.0.0.0:8006
              --timeout 120
              --access-logfile -"
     env_file:
@@ -88,7 +88,7 @@ services:
   # ── Next.js Frontend ───────────────────────────────────────────────────────
   frontend:
     environment:
-      API_BASE_URL: http://backend:8000
+      API_BASE_URL: http://backend:8006
       API_KEY: ${API_KEY}
       NODE_ENV: production
 

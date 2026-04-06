@@ -11,7 +11,7 @@ export async function getServerSideJobSummary(): Promise<{
   completed: number;
   recent: ResultsResponse["records"];
 } | null> {
-  const baseUrl = process.env.API_BASE_URL ?? "http://localhost:8000";
+  const baseUrl = process.env.API_BASE_URL ?? "http://localhost:8006";
   const apiKey = process.env.API_KEY ?? "";
 
   try {

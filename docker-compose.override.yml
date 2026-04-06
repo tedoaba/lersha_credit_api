@@ -27,7 +27,7 @@ services:
 
   # ── FastAPI Backend (hot reload + bind mounts) ─────────────────────────────
   backend:
-    command: uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+    command: uvicorn backend.main:app --reload --host 0.0.0.0 --port 8006
     env_file:
       - .env
     environment:
@@ -36,7 +36,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       CELERY_TASK_ALWAYS_EAGER: "true"
     ports:
-      - "8000:8000"
+      - "8006:8006"
     volumes:
       # Bind mounts enable hot reload — code changes are reflected instantly
       - ./backend:/app/backend
@@ -54,10 +54,10 @@ services:
   # ── Next.js Frontend (dev — exposed for direct browser access) ─────────────
   frontend:
     environment:
-      API_BASE_URL: http://backend:8000
+      API_BASE_URL: http://backend:8006
       API_KEY: ${API_KEY}
     ports:
-      - "3000:3000"
+      - "3007:3007"
     volumes:
       - ./frontend:/app
       - /app/node_modules

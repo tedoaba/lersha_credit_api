@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000").rstrip("/")
+_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8006").rstrip("/")
 _API_KEY = os.getenv("API_KEY", "")
 _TIMEOUT = (5, 60)  # (connect, read) seconds
 

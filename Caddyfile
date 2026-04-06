@@ -9,28 +9,28 @@
 #   Add `tls internal` inside the site block to use a self-signed certificate.
 #
 # ROUTING (priority order — most specific first):
-#   /v1/*     → FastAPI backend  (port 8000) — versioned API routes
-#   /health   → FastAPI backend  (port 8000) — health check
-#   /docs     → FastAPI backend  (port 8000) — OpenAPI docs
-#   /redoc    → FastAPI backend  (port 8000) — ReDoc
+#   /v1/*     → FastAPI backend  (port 8006) — versioned API routes
+#   /health   → FastAPI backend  (port 8006) — health check
+#   /docs     → FastAPI backend  (port 8006) — OpenAPI docs
+#   /redoc    → FastAPI backend  (port 8006) — ReDoc
 #   /mlflow/* → MLflow           (port 5000) — experiment tracking (internal)
-#   /*        → Next.js frontend (port 3000) — all other paths
+#   /*        → Next.js frontend (port 3007) — all other paths
 #
 # HTTP → HTTPS redirect is automatic (Caddy default behaviour).
 
 your-domain.com {
     # API routes — versioned endpoints
-    reverse_proxy /v1/* backend:8000
+    reverse_proxy /v1/* backend:8006
 
     # Health check + OpenAPI docs
-    reverse_proxy /health backend:8000
-    reverse_proxy /docs backend:8000
-    reverse_proxy /redoc backend:8000
-    reverse_proxy /openapi.json backend:8000
+    reverse_proxy /health backend:8006
+    reverse_proxy /docs backend:8006
+    reverse_proxy /redoc backend:8006
+    reverse_proxy /openapi.json backend:8006
 
     # MLflow tracking UI (internal — consider restricting with basicauth)
     reverse_proxy /mlflow/* mlflow:5000
 
     # Next.js frontend — all remaining paths
-    reverse_proxy /* frontend:3000
+    reverse_proxy /* frontend:3007
 }

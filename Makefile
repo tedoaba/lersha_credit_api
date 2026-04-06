@@ -1,6 +1,8 @@
 # Lersha Credit Scoring System — Makefile
 # Usage: make <target>
 
+SHELL := bash
+
 .PHONY: help install setup-db migrate db-stamp setup-rag lint format check-format ci-quality typecheck pre-commit test coverage dev api mlflow docker-build docker-up docker-down docker-prod-up docker-prod-down restore-db clean frontend-dev frontend-build frontend-up cli-health cli-predict cli-results
 
 # Default target
@@ -18,9 +20,9 @@ help:
 	@echo ""
 	@echo "Development:"
 	@echo "  make dev           Start API + Next.js frontend together"
-	@echo "  make api           Start the FastAPI backend on port 8000 (hot reload)"
+	@echo "  make api           Start the FastAPI backend on port 8006 (hot reload)"
 	@echo "  make mlflow        Start the MLflow tracking server on port 5000"
-	@echo "  make frontend-dev  Start the Next.js frontend only on port 3000"
+	@echo "  make frontend-dev  Start the Next.js frontend only on port 3007"
 	@echo "  make frontend-build Build the Next.js frontend for production"
 	@echo "  make frontend-up   Start the Next.js frontend Docker service"
 	@echo ""
@@ -70,25 +72,28 @@ setup-rag:
 
 # Starts FastAPI backend + Next.js frontend concurrently.
 # API runs in the background; Ctrl-C stops both.
-# Frontend is available at http://localhost:3000, API at http://localhost:8000
+# Frontend is available at http://localhost:3007, API at http://localhost:8006
 dev: migrate
-	uv run uvicorn backend.main:app --reload --reload-dir backend --port 8000 --host 0.0.0.0 & \
+	@uv run uvicorn backend.main:app --reload --reload-dir backend --port 8006 --host 0.0.0.0 & \
 	API_PID=$$!; \
 	trap "kill $$API_PID 2>/dev/null; exit" INT TERM; \
 	echo "Waiting for API to be ready..."; \
-	until curl -sf http://localhost:8000/health > /dev/null 2>&1; do sleep 1; done; \
-	echo "API ready — starting Next.js frontend on http://localhost:3000 ..."; \
-	cd frontend && npm run dev; \
+	for i in $$(seq 1 30); do \
+		curl -sf http://localhost:8006/ > /dev/null 2>&1 && break; \
+		sleep 2; \
+	done; \
+	echo "API ready — starting Next.js frontend on http://localhost:3007 ..."; \
+	cd frontend && npm run dev -- --port 3007; \
 	kill $$API_PID 2>/dev/null
 
 api:
-	uv run uvicorn backend.main:app --reload --reload-dir backend --port 8000 --host 0.0.0.0
+	uv run uvicorn backend.main:app --reload --reload-dir backend --port 8006 --host 0.0.0.0
 
 mlflow:
 	uv run mlflow ui --backend-store-uri mlruns --port 5000
 
 frontend-dev:
-	cd frontend && npm run dev
+	cd frontend && npm run dev -- --port 3007
 
 frontend-build:
 	cd frontend && npm run build

@@ -180,16 +180,16 @@ This starts the **API** and **Next.js frontend** concurrently with a single comm
 
 | Service | URL |
 |---|---|
-| FastAPI backend | http://localhost:8000 |
-| Swagger / OpenAPI docs | http://localhost:8000/docs |
-| Next.js frontend | http://localhost:3000 |
+| FastAPI backend | http://localhost:8006 |
+| Swagger / OpenAPI docs | http://localhost:8006/docs |
+| Next.js frontend | http://localhost:3007 |
 
 To stop: press `Ctrl-C` (stops both).
 
 > You can also start them individually:
 > ```bash
-> make api          # backend only — port 8000
-> make frontend-dev # frontend only — port 3000
+> make api          # backend only — port 8006
+> make frontend-dev # frontend only — port 3007
 > ```
 
 ---
@@ -217,7 +217,7 @@ required variables are missing.
 | `REDIS_URL` | `redis://localhost:6379/0` | Celery broker (production only) |
 | `CELERY_TASK_ALWAYS_EAGER` | `false` | `true` = run inference in-process (local dev, no Redis needed) |
 | `EMBEDDER_MODEL` | `all-MiniLM-L6-v2` | Sentence-Transformers embedding model (used by pgvector RAG) |
-| `API_BASE_URL` | `http://localhost:8000` | Backend URL used by CLI and Next.js frontend (server-side) |
+| `API_BASE_URL` | `http://localhost:8006` | Backend URL used by CLI and Next.js frontend (server-side) |
 | `MLFLOW_TRACKING_URI` | `mlruns/` | MLflow backend store URI |
 
 > **Note**: `rag_top_k` and `rag_similarity_threshold` are tuned in
@@ -227,9 +227,9 @@ required variables are missing.
 
 ## API Reference
 
-**Base URL:** `http://localhost:8000`  
+**Base URL:** `http://localhost:8006`  
 **Auth:** All `/v1/` routes require header `X-API-Key: <value>`  
-**Interactive docs:** `http://localhost:8000/docs`
+**Interactive docs:** `http://localhost:8006/docs`
 
 ### Endpoints
 
@@ -244,7 +244,7 @@ required variables are missing.
 ### Submit a Prediction
 
 ```bash
-curl -X POST http://localhost:8000/v1/predict/ \
+curl -X POST http://localhost:8006/v1/predict/ \
   -H "X-API-Key: dev-local-api-key" \
   -H "Content-Type: application/json" \
   -d '{"source": "Batch Prediction", "number_of_rows": 5}'
@@ -269,7 +269,7 @@ For a single farmer:
 ### Poll Job Status
 
 ```bash
-curl http://localhost:8000/v1/predict/<job_id> \
+curl http://localhost:8006/v1/predict/<job_id> \
   -H "X-API-Key: dev-local-api-key"
 ```
 
@@ -302,7 +302,7 @@ Job `status` values: `pending` → `processing` → `completed` | `failed`
 ### Get Evaluation History
 
 ```bash
-curl "http://localhost:8000/v1/results/?limit=100" \
+curl "http://localhost:8006/v1/results/?limit=100" \
   -H "X-API-Key: dev-local-api-key"
 ```
 
@@ -323,8 +323,8 @@ uv run python -m backend.scripts.populate_pgvector  # Populate rag_documents tab
 
 # ── Development ────────────────────────────────────────────────
 make dev            # Start API + Next.js frontend together
-make api            # Start FastAPI backend on :8000 (hot reload)
-make frontend-dev   # Start Next.js frontend on :3000
+make api            # Start FastAPI backend on :8006 (hot reload)
+make frontend-dev   # Start Next.js frontend on :3007
 make mlflow         # Start MLflow UI on :5000
 
 # ── Quality ────────────────────────────────────────────────────
