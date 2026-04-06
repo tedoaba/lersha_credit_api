@@ -28,6 +28,8 @@ class CreditScoringRecord(BaseModel):
     top_feature_contributions: list[FeatureContribution]
     rag_explanation: str
     model_name: str
+    class_probabilities: dict[str, float] | None = None
+    confidence_score: float | None = None
     job_id: str | None = None
 
     timestamp: datetime

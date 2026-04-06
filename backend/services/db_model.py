@@ -7,7 +7,7 @@ Extended in 006-migrate-chroma-pgvector (2026-04-01):
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import JSON as SA_JSON
-from sqlalchemy import TIMESTAMP, Boolean, Column, Integer, String, Text
+from sqlalchemy import TIMESTAMP, Boolean, Column, Float, Integer, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import declarative_base
@@ -33,6 +33,8 @@ class CreditScoringRecordDB(Base):
     top_feature_contributions = Column(SA_JSON, nullable=False)
     rag_explanation = Column(Text, nullable=False)
     model_name = Column(Text, nullable=False)
+    class_probabilities = Column(JSONB, nullable=True)
+    confidence_score = Column(Float, nullable=True)
 
     job_id = Column(String(36), nullable=True, index=True)
     timestamp = Column(TIMESTAMP(timezone=True), nullable=False)

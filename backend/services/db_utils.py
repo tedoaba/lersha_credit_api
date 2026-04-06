@@ -283,6 +283,8 @@ def save_batch_evaluations(input_df: pd.DataFrame, evaluation_results: list, *, 
                     top_feature_contributions=result["top_feature_contributions"],
                     rag_explanation=result["rag_explanation"],
                     model_name=result["model_name"],
+                    class_probabilities=result.get("class_probabilities"),
+                    confidence_score=result.get("confidence_score"),
                     job_id=job_id,
                     timestamp=datetime.utcnow(),
                 )
@@ -296,6 +298,8 @@ def save_batch_evaluations(input_df: pd.DataFrame, evaluation_results: list, *, 
                     top_feature_contributions=[fc.dict() for fc in record.top_feature_contributions],
                     rag_explanation=record.rag_explanation,
                     model_name=record.model_name,
+                    class_probabilities=record.class_probabilities,
+                    confidence_score=record.confidence_score,
                     job_id=record.job_id,
                     timestamp=record.timestamp,
                 )
@@ -427,11 +431,14 @@ def get_all_results(limit: int = 500, model_name: str | None = None) -> list[dic
     engine = db_engine()
     farmer_table = config.farmer_data_all
     base = (
-        f"SELECT cr.*, "  # noqa: S608
+        f"SELECT cr.id, cr.farmer_uid, "  # noqa: S608
         f"COALESCE(cr.first_name, fd.first_name) AS first_name, "
         f"COALESCE(cr.middle_name, fd.middle_name) AS middle_name, "
         f"COALESCE(cr.last_name, fd.last_name) AS last_name, "
-        f"fd.gender "
+        f"cr.predicted_class_name, cr.top_feature_contributions, "
+        f"cr.rag_explanation, cr.model_name, "
+        f"cr.class_probabilities, cr.confidence_score, "
+        f"cr.job_id, cr.timestamp, fd.gender "
         f"FROM candidate_result cr "
         f"LEFT JOIN {farmer_table} fd ON cr.farmer_uid = fd.farmer_uid"
     )
@@ -444,6 +451,8 @@ def get_all_results(limit: int = 500, model_name: str | None = None) -> list[dic
 
     with engine.connect() as conn:
         df = pd.read_sql(query, conn, params=params)
+    # Convert to object dtype first so None isn't coerced back to NaN in float columns
+    df = df.astype(object).where(df.notna(), None)
     return df.to_dict(orient="records")
 
 
@@ -501,11 +510,14 @@ def get_results_paginated(
     # Data query with pagination
     offset = (page - 1) * per_page
     data_sql = text(
-        f"SELECT cr.*, "  # noqa: S608
+        f"SELECT cr.id, cr.farmer_uid, "  # noqa: S608
         f"COALESCE(cr.first_name, fd.first_name) AS first_name, "
         f"COALESCE(cr.middle_name, fd.middle_name) AS middle_name, "
         f"COALESCE(cr.last_name, fd.last_name) AS last_name, "
-        f"fd.gender "
+        f"cr.predicted_class_name, cr.top_feature_contributions, "
+        f"cr.rag_explanation, cr.model_name, "
+        f"cr.class_probabilities, cr.confidence_score, "
+        f"cr.job_id, cr.timestamp, fd.gender "
         f"FROM candidate_result cr "
         f"LEFT JOIN {farmer_table} fd ON cr.farmer_uid = fd.farmer_uid "
         f"{where_sql} "
@@ -518,6 +530,8 @@ def get_results_paginated(
         total = conn.execute(count_sql, params).scalar() or 0
         df = pd.read_sql(data_sql, conn, params=params)
 
+    # Convert to object dtype first so None isn't coerced back to NaN in float columns
+    df = df.astype(object).where(df.notna(), None)
     return {
         "total": total,
         "page": page,

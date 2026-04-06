@@ -73,6 +73,8 @@ class EvaluationRecord(BaseModel):
     top_feature_contributions: list[FeatureContribution]
     rag_explanation: str
     model_name: str
+    class_probabilities: dict[str, float] | None = None
+    confidence_score: float | None = None
 
 
 class ModelResult(BaseModel):
@@ -103,6 +105,8 @@ class ResultsRecord(BaseModel):
     top_feature_contributions: list[FeatureContribution]
     rag_explanation: str
     model_name: str
+    class_probabilities: dict[str, float] | None = None
+    confidence_score: float | None = None
     timestamp: datetime | None = None
     gender: str | None = None
 
