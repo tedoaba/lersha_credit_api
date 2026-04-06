@@ -153,6 +153,18 @@ export interface PaginatedResultsResponse {
 
 // ── Analytics ───────────────────────────────────────────────────────────────
 
+export interface ConfidenceBucket {
+  range: string;
+  count: number;
+}
+
+export interface RiskFactor {
+  feature: string;
+  mean_abs_shap: number;
+  direction: "increases_risk" | "reduces_risk";
+  count: number;
+}
+
 export interface AnalyticsSummaryResponse {
   total: number;
   total_farmers: number;
@@ -160,6 +172,8 @@ export interface AnalyticsSummaryResponse {
   by_consensus: Record<string, number>;
   by_gender: Record<string, Record<string, number>>;
   by_model: Record<string, Record<string, number>>;
+  confidence_distribution: ConfidenceBucket[];
+  top_risk_factors: RiskFactor[];
 }
 
 // ── Jobs list ───────────────────────────────────────────────────────────────

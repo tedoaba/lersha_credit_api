@@ -604,6 +604,59 @@ def get_analytics_summary() -> dict:
             c = str(row["consensus"])
             by_consensus[c] = by_consensus.get(c, 0) + 1
 
+        # Confidence distribution — bucket scores into 10% ranges
+        confidence_sql = text(
+            "SELECT "
+            "  FLOOR(COALESCE(confidence_score, 0) * 10) AS bucket, "
+            "  COUNT(*) AS count "
+            "FROM candidate_result "
+            "WHERE confidence_score IS NOT NULL "
+            "GROUP BY bucket ORDER BY bucket"
+        )
+        conf_df = pd.read_sql(confidence_sql, conn)
+        confidence_distribution: list[dict[str, object]] = []
+        for _, row in conf_df.iterrows():
+            b = int(row["bucket"])
+            lo = b * 10
+            hi = min((b + 1) * 10, 100)
+            confidence_distribution.append({
+                "range": f"{lo}-{hi}%",
+                "count": int(row["count"]),
+            })
+
+        # Aggregate SHAP — top features by mean |SHAP value| across all predictions
+        shap_sql = text(
+            "SELECT top_feature_contributions FROM candidate_result "
+            "WHERE top_feature_contributions IS NOT NULL"
+        )
+        shap_df = pd.read_sql(shap_sql, conn)
+        feature_totals: dict[str, list[float]] = {}
+        for _, row in shap_df.iterrows():
+            contribs = row["top_feature_contributions"]
+            if isinstance(contribs, str):
+                import json
+                contribs = json.loads(contribs)
+            if not isinstance(contribs, list):
+                continue
+            for item in contribs:
+                feat = item.get("feature", "")
+                val = item.get("value", 0.0)
+                feature_totals.setdefault(feat, []).append(float(val))
+
+        top_risk_factors: list[dict[str, object]] = []
+        for feat, values in feature_totals.items():
+            abs_vals = [abs(v) for v in values]
+            mean_abs = sum(abs_vals) / len(abs_vals) if abs_vals else 0
+            mean_val = sum(values) / len(values) if values else 0
+            top_risk_factors.append({
+                "feature": feat,
+                "mean_abs_shap": round(mean_abs, 4),
+                "direction": "increases_risk" if mean_val > 0 else "reduces_risk",
+                "count": len(values),
+            })
+        top_risk_factors.sort(key=lambda x: x["mean_abs_shap"], reverse=True)  # type: ignore[arg-type]
+        top_risk_factors = top_risk_factors[:15]  # top 15
+
     return {
         "total": int(total_row),
         "total_farmers": total_farmers,
@@ -611,6 +664,8 @@ def get_analytics_summary() -> dict:
         "by_consensus": by_consensus,
         "by_gender": by_gender,
         "by_model": by_model,
+        "confidence_distribution": confidence_distribution,
+        "top_risk_factors": top_risk_factors,
     }
 
 

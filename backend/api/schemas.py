@@ -130,6 +130,22 @@ class PaginatedResultsResponse(BaseModel):
 # ── Analytics endpoint ────────────────────────────────────────────────────────
 
 
+class ConfidenceBucket(BaseModel):
+    """A single confidence score histogram bucket."""
+
+    range: str
+    count: int
+
+
+class RiskFactor(BaseModel):
+    """An aggregated SHAP risk factor."""
+
+    feature: str
+    mean_abs_shap: float
+    direction: str
+    count: int
+
+
 class AnalyticsSummaryResponse(BaseModel):
     """Response body for GET /v1/analytics/summary."""
 
@@ -139,6 +155,8 @@ class AnalyticsSummaryResponse(BaseModel):
     by_consensus: dict[str, int]
     by_gender: dict[str, dict[str, int]]
     by_model: dict[str, dict[str, int]]
+    confidence_distribution: list[ConfidenceBucket]
+    top_risk_factors: list[RiskFactor]
 
 
 # ── Jobs list endpoint ────────────────────────────────────────────────────────
