@@ -157,12 +157,97 @@ FEATURE_DEFINITIONS: list[tuple[str, str, str]] = [
 
 _H2_SPLIT = re.compile(r"(?=^## )", re.MULTILINE)
 
+# Chunk size / overlap tuned for mxbai-embed-large (~512-token context).
+# Token-dense content (markdown tables) can use ~2 chars/token, so 900 chars
+# ensures even worst-case table content stays within the 512-token window.
+CHUNK_SIZE = 900
+CHUNK_OVERLAP = 100
+
+# Separators tried in order — split on the most semantically meaningful
+# boundary first, fall back to smaller boundaries for dense text.
+_SEPARATORS: list[str] = ["\n## ", "\n### ", "\n\n", "\n", ". ", " "]
+
+
+def _recursive_split(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
+    """Recursively split text into overlapping chunks.
+
+    Tries each separator in ``_SEPARATORS`` order. When a split produces
+    pieces that fit within ``chunk_size``, they are accepted (with overlap
+    from the previous chunk prepended). Pieces that are still too long are
+    re-split with the next separator.
+
+    Args:
+        text: The text to split.
+        chunk_size: Target maximum characters per chunk.
+        overlap: Number of characters to repeat from the end of the
+            previous chunk at the start of the next.
+
+    Returns:
+        List of text chunks, each ≤ ``chunk_size`` characters (except when
+        no separator can split a contiguous block — rare edge case).
+    """
+    if len(text) <= chunk_size:
+        return [text]
+
+    # Find the best separator that actually appears in the text
+    sep = None
+    for candidate in _SEPARATORS:
+        if candidate in text:
+            sep = candidate
+            break
+
+    if sep is None:
+        # No separator found — hard split as last resort
+        chunks = []
+        for start in range(0, len(text), chunk_size - overlap):
+            chunks.append(text[start : start + chunk_size])
+        return chunks
+
+    # Split on the chosen separator
+    parts = text.split(sep)
+    chunks: list[str] = []
+    current = ""
+
+    for part in parts:
+        # Would adding this part exceed the limit?
+        candidate = (current + sep + part) if current else part
+        if len(candidate) <= chunk_size:
+            current = candidate
+        else:
+            if current:
+                chunks.append(current)
+            # If single part exceeds chunk_size, recurse with next separator
+            if len(part) > chunk_size:
+                sub_chunks = _recursive_split(part, chunk_size, overlap)
+                chunks.extend(sub_chunks)
+                current = ""
+            else:
+                current = part
+
+    if current:
+        chunks.append(current)
+
+    # Apply overlap — prepend tail of previous chunk to each subsequent chunk
+    if overlap > 0 and len(chunks) > 1:
+        overlapped: list[str] = [chunks[0]]
+        for i in range(1, len(chunks)):
+            prev_tail = chunks[i - 1][-overlap:]
+            overlapped.append(prev_tail + chunks[i])
+        chunks = overlapped
+
+    return chunks
+
 
 def chunk_markdown(filepath: Path, base_dir: Path) -> list[tuple[str, str, str, str]]:
-    """Split a markdown file into section-based chunks.
+    """Split a markdown file into overlapping chunks for embedding.
 
-    Each chunk gets the H1 title prepended for context.  Empty sections
-    (heading only, no body text) are skipped.
+    Strategy:
+      1. Extract the H1 title for context.
+      2. Split on ``## `` (H2) headings to get semantic sections.
+      3. For each section, if it fits within ``CHUNK_SIZE``, keep as-is.
+         Otherwise, recursively split with overlap.
+      4. Each chunk is prefixed with the H1 title + section heading so
+         the embedding captures document-level context.
 
     Returns:
         List of ``(doc_id_seed, title, content, category)`` tuples.
@@ -188,19 +273,30 @@ def chunk_markdown(filepath: Path, base_dir: Path) -> list[tuple[str, str, str, 
             heading = heading_match.group(1).strip()
             body = section[heading_match.end() :].strip()
         else:
-            # Preamble before any H2 (contains H1 + intro text)
             heading = "Introduction"
             body = section
 
         if not body:
             continue
 
-        # Prepend H1 title for context
-        chunk_content = f"{h1_title} — {heading}\n\n{body}"
-        doc_id_seed = f"lersha.rag.md.{relative}#{heading}"
+        prefix = f"{h1_title} — {heading}"
+        doc_id_base = f"lersha.rag.md.{relative}#{heading}"
         title = f"{h1_title} > {heading}"
 
-        chunks.append((doc_id_seed, title, chunk_content, "domain_knowledge"))
+        # Reserve space for the prefix line
+        available = CHUNK_SIZE - len(prefix) - 4  # 4 for "\n\n" padding
+        sub_texts = _recursive_split(body, chunk_size=available, overlap=CHUNK_OVERLAP)
+
+        for idx, sub_text in enumerate(sub_texts):
+            chunk_content = f"{prefix}\n\n{sub_text.strip()}"
+            if len(sub_texts) == 1:
+                doc_id_seed = doc_id_base
+                chunk_title = title
+            else:
+                doc_id_seed = f"{doc_id_base}__p{idx}"
+                chunk_title = f"{title} (part {idx + 1})"
+
+            chunks.append((doc_id_seed, chunk_title, chunk_content, "domain_knowledge"))
 
     return chunks
 
@@ -289,27 +385,37 @@ def populate_pgvector(batch_size: int = BATCH_SIZE) -> int:
 
     ollama = httpx.Client(base_url=config.ollama_host, timeout=120.0)
 
-    # max_chars = 2000  # Safe limit for mxbai-embed-large (512-token context)
-
-    def _embed_batch(texts: list[str]) -> list[list[float]]:
-        """Embed texts via Ollama /api/embed, one at a time.
-
-        Truncates each text to ``max_chars`` characters to stay within
-        the embedding model's context window.
-        """
-        all_embs: list[list[float]] = []
-        for text_item in texts:
+    def _embed_one(text_item: str) -> list[float]:
+        """Embed a single text, adaptively reducing length on 400 errors."""
+        text_item = text_item.strip()
+        if not text_item:
+            text_item = "empty"
+        length = len(text_item)
+        while length > 50:
             resp = ollama.post(
                 "/api/embed",
                 json={
                     "model": config.embedder_model,
-                    "input": [text_item],
+                    "input": [text_item[:length]],
                     "options": {"num_ctx": 8192},
                 },
             )
+            if resp.status_code == 400:
+                length = int(length * 0.75)
+                continue
             resp.raise_for_status()
-            all_embs.append(resp.json()["embeddings"][0])
-        return all_embs
+            return resp.json()["embeddings"][0]
+        # Last resort — embed a short summary
+        resp = ollama.post(
+            "/api/embed",
+            json={"model": config.embedder_model, "input": [text_item[:50]], "options": {"num_ctx": 8192}},
+        )
+        resp.raise_for_status()
+        return resp.json()["embeddings"][0]
+
+    def _embed_batch(texts: list[str]) -> list[list[float]]:
+        """Embed texts via Ollama /api/embed, one at a time."""
+        return [_embed_one(t) for t in texts]
 
     # ── Source 1: Inline feature definitions ──────────────────────────────
     feature_contents = [defn for _, defn, _ in FEATURE_DEFINITIONS]
