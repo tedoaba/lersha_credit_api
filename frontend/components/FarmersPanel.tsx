@@ -21,7 +21,8 @@ import {
 } from "@/components/ui/table";
 import DecisionBadge from "@/components/DecisionBadge";
 import FarmerDetailDrawer from "@/components/FarmerDetailDrawer";
-import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, X, Plus } from "lucide-react";
+import { useJobStore } from "@/lib/stores";
 import { groupByFarmer } from "@/lib/types";
 import type { GroupedFarmer } from "@/lib/types";
 
@@ -88,8 +89,19 @@ export default function FarmersPanel() {
     setDrawerOpen(true);
   }, []);
 
+  const openPredictionModal = useJobStore((s) => s.openPredictionModal);
+
   return (
     <div className="space-y-6">
+      {/* Section Header */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold tracking-tight">Farmers</h2>
+        <Button onClick={openPredictionModal} className="gap-1.5">
+          <Plus className="h-4 w-4" />
+          New Prediction
+        </Button>
+      </div>
+
       {/* Search and Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <form onSubmit={handleSearch} className="flex gap-2 flex-1 max-w-md">

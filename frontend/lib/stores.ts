@@ -12,12 +12,18 @@ import { create } from "zustand";
 
 interface JobState {
   activeJobId: string | null;
+  predictionModalOpen: boolean;
   setActiveJobId: (id: string | null) => void;
   clearActiveJobId: () => void;
+  openPredictionModal: () => void;
+  closePredictionModal: () => void;
 }
 
 export const useJobStore = create<JobState>()((set) => ({
   activeJobId: null,
+  predictionModalOpen: false,
   setActiveJobId: (id) => set({ activeJobId: id }),
   clearActiveJobId: () => set({ activeJobId: null }),
+  openPredictionModal: () => set({ predictionModalOpen: true }),
+  closePredictionModal: () => set({ predictionModalOpen: false }),
 }));
