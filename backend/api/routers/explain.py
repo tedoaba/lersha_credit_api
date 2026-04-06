@@ -67,10 +67,7 @@ def explain_prediction(item: ExplainRequest) -> ExplainResponse:
 
     farmer_uid: str = record.get("farmer_uid", "unknown")
     prediction: str = record.get("predicted_class_name", "Unknown")
-    shap_dict: dict = {
-        entry["feature"]: entry["value"]
-        for entry in (record.get("top_feature_contributions") or [])
-    }
+    shap_dict: dict = {entry["feature"]: entry["value"] for entry in (record.get("top_feature_contributions") or [])}
 
     # ── Delegate to RagService ────────────────────────────────────────────────
     try:
@@ -177,11 +174,8 @@ def _fetch_record(job_id: str, record_index: int, model_name: str) -> dict:
 
     record = evaluations[record_index]
 
-    # Try to enrich with farmer_uid from the raw data table if not in evaluation record
-    farmer_uid = record.get("farmer_uid")
-    if not farmer_uid:
-        all_results = db_utils.get_all_results(limit=1000)
-        farmer_uid = all_results[0].get("farmer_uid", "unknown") if all_results else "unknown"
-        record = {**record, "farmer_uid": farmer_uid}
+    # Ensure farmer_uid is present (default to "unknown" if missing from record)
+    if not record.get("farmer_uid"):
+        record = {**record, "farmer_uid": "unknown"}
 
     return record

@@ -82,7 +82,7 @@ class ResultsRecord(BaseModel):
     middle_name: str | None = None
     last_name: str | None = None
     predicted_class_name: str
-    top_feature_contributions: list[dict]
+    top_feature_contributions: list[FeatureContribution]
     rag_explanation: str
     model_name: str
     timestamp: datetime | None = None

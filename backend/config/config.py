@@ -125,10 +125,14 @@ class Config:
 
         # ── Database ───────────────────────────────────────────────────────
         self.db_uri = os.getenv("DB_URI")
+        if not self.db_uri:
+            raise ValueError("DB_URI environment variable not set")
         self.db_table = os.getenv("DB_TABLE")
         self.candidate_raw_data_table = os.getenv("CANDIDATE_RAW_DATA_TABLE", "candidate_raw_data_table")
         self.candidate_result = os.getenv("CANDIDATE_RESULT", "candidate_result")
         self.farmer_data_all = os.getenv("FARMER_DATA_ALL")
+        if not self.farmer_data_all:
+            raise ValueError("FARMER_DATA_ALL environment variable not set")
 
         # ── LLM / Embeddings ───────────────────────────────────────────────────────
         # Legacy path: used by rag_engine.get_rag_explanation() only.

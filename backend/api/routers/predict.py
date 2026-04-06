@@ -15,6 +15,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 
 from backend.api.dependencies import limiter, require_api_key
 from backend.api.schemas import JobAcceptedResponse, JobStatusResponse, PredictRequest
@@ -83,7 +84,7 @@ async def submit_prediction(
 
 
 @router.get("/{job_id}", response_model=JobStatusResponse)
-async def get_prediction_status(job_id: str) -> JobStatusResponse:
+async def get_prediction_status(job_id: str) -> JSONResponse:
     """Poll the status of an inference job.
 
     Returns HTTP 202 if the job is still pending/processing,
@@ -99,9 +100,11 @@ async def get_prediction_status(job_id: str) -> JobStatusResponse:
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
 
-    return JobStatusResponse(
+    body = JobStatusResponse(
         job_id=job["job_id"],
         status=job["status"],
         result=job.get("result"),
         error=job.get("error"),
     )
+    http_status = status.HTTP_202_ACCEPTED if job["status"] in ("pending", "processing") else status.HTTP_200_OK
+    return JSONResponse(content=body.model_dump(mode="json"), status_code=http_status)

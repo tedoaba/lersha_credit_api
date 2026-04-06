@@ -204,7 +204,9 @@ class RagService:
                         "top_k": top_k,
                     },
                 ).fetchall()
-                docs = [RetrievedDoc(doc_id=row.id, content=row.content, similarity=float(row.similarity)) for row in rows]
+                docs = [
+                    RetrievedDoc(doc_id=row.id, content=row.content, similarity=float(row.similarity)) for row in rows
+                ]
         except SQLAlchemyError:
             logger.error("pgvector retrieval failed for query: %.80s", query, exc_info=True)
             raise
@@ -361,10 +363,7 @@ class RagService:
         Returns:
             Query string for embedding and pgvector retrieval.
         """
-        top_shap = {
-            k: round(v, 6)
-            for k, v in sorted(shap_dict.items(), key=lambda x: abs(x[1]), reverse=True)[:10]
-        }
+        top_shap = {k: round(v, 6) for k, v in sorted(shap_dict.items(), key=lambda x: abs(x[1]), reverse=True)[:10]}
         shap_json = json.dumps(top_shap, separators=(",", ":"))
         return f"Model predicted: {prediction}\nTop features: {shap_json}"
 
@@ -472,7 +471,8 @@ class RagService:
             Stripped explanation text from the model response.
         """
         model_id = self._config.gemini_model_id
-        assert model_id is not None, "GEMINI_MODEL must be set in config"
+        if model_id is None:
+            raise ValueError("GEMINI_MODEL must be set in config")
         t0 = time.perf_counter()
         response = self._gemini.models.generate_content(
             model=model_id,
