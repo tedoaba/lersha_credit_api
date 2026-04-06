@@ -30,13 +30,50 @@ export function useJobStatus(jobId: string | null) {
   });
 }
 
-// ── Results list ────────────────────────────────────────────────────────────
+// ── Results list (legacy) ──────────────────────────────────────────────────
 
 export function useResults(options: { limit?: number; model_name?: string } = {}) {
   return useQuery({
     queryKey: ["results", options],
     queryFn: () => lershaClient.getResults(options),
     staleTime: 60_000,
+  });
+}
+
+// ── Results paginated ──────────────────────────────────────────────────────
+
+export function useResultsPaginated(options: {
+  page?: number;
+  per_page?: number;
+  search?: string;
+  decision?: string;
+  gender?: string;
+  model_name?: string;
+} = {}) {
+  return useQuery({
+    queryKey: ["results-paginated", options],
+    queryFn: () => lershaClient.getResultsPaginated(options),
+    staleTime: 30_000,
+  });
+}
+
+// ── Analytics summary ──────────────────────────────────────────────────────
+
+export function useAnalytics() {
+  return useQuery({
+    queryKey: ["analytics"],
+    queryFn: () => lershaClient.getAnalytics(),
+    staleTime: 60_000,
+  });
+}
+
+// ── Jobs list ──────────────────────────────────────────────────────────────
+
+export function useJobs(limit?: number) {
+  return useQuery({
+    queryKey: ["jobs", limit],
+    queryFn: () => lershaClient.getJobs(limit),
+    staleTime: 15_000,
   });
 }
 

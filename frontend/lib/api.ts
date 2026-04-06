@@ -7,10 +7,13 @@
  */
 
 import type {
+  AnalyticsSummaryResponse,
   ExplainRequest,
   ExplainResponse,
   JobAcceptedResponse,
+  JobsListResponse,
   JobStatusResponse,
+  PaginatedResultsResponse,
   PredictRequest,
   ResultsResponse,
 } from "./types";
@@ -61,7 +64,7 @@ export class LershaClient {
     return this.request<JobStatusResponse>(`/api/predict/${jobId}`);
   }
 
-  /** GET /api/results */
+  /** GET /api/results (legacy flat mode) */
   async getResults(
     options: { limit?: number; model_name?: string } = {},
   ): Promise<ResultsResponse> {
@@ -70,6 +73,38 @@ export class LershaClient {
     if (options.model_name) params.set("model_name", options.model_name);
     const qs = params.toString();
     return this.request<ResultsResponse>(`/api/results${qs ? `?${qs}` : ""}`);
+  }
+
+  /** GET /api/results with pagination and filters */
+  async getResultsPaginated(
+    options: {
+      page?: number;
+      per_page?: number;
+      search?: string;
+      decision?: string;
+      gender?: string;
+      model_name?: string;
+    } = {},
+  ): Promise<PaginatedResultsResponse> {
+    const params = new URLSearchParams();
+    params.set("page", String(options.page ?? 1));
+    params.set("per_page", String(options.per_page ?? 20));
+    if (options.search) params.set("search", options.search);
+    if (options.decision) params.set("decision", options.decision);
+    if (options.gender) params.set("gender", options.gender);
+    if (options.model_name) params.set("model_name", options.model_name);
+    return this.request<PaginatedResultsResponse>(`/api/results?${params}`);
+  }
+
+  /** GET /api/analytics */
+  async getAnalytics(): Promise<AnalyticsSummaryResponse> {
+    return this.request<AnalyticsSummaryResponse>("/api/analytics");
+  }
+
+  /** GET /api/jobs */
+  async getJobs(limit?: number): Promise<JobsListResponse> {
+    const params = limit ? `?limit=${limit}` : "";
+    return this.request<JobsListResponse>(`/api/jobs${params}`);
   }
 
   /** POST /api/explain */

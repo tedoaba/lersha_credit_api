@@ -73,11 +73,42 @@ export interface ResultsRecord {
   rag_explanation: string;
   model_name: string;
   timestamp: string | null; // ISO 8601
+  gender: string | null;
 }
 
 export interface ResultsResponse {
   total: number;
   records: ResultsRecord[];
+}
+
+export interface PaginatedResultsResponse {
+  total: number;
+  page: number;
+  per_page: number;
+  records: ResultsRecord[];
+}
+
+// ── Analytics ───────────────────────────────────────────────────────────────
+
+export interface AnalyticsSummaryResponse {
+  total: number;
+  by_decision: Record<string, number>;
+  by_gender: Record<string, Record<string, number>>;
+  recent: ResultsRecord[];
+}
+
+// ── Jobs list ───────────────────────────────────────────────────────────────
+
+export interface JobRecord {
+  job_id: string;
+  status: string;
+  error: string | null;
+  created_at: string | null;
+  completed_at: string | null;
+}
+
+export interface JobsListResponse {
+  jobs: JobRecord[];
 }
 
 // ── Explain endpoint ────────────────────────────────────────────────────────
@@ -104,3 +135,9 @@ export interface ApiError {
   status: number;
   message: string;
 }
+
+// ── Decision types ──────────────────────────────────────────────────────────
+
+export type Decision = "Eligible" | "Review" | "Not Eligible";
+
+export const DECISIONS: Decision[] = ["Eligible", "Review", "Not Eligible"];
