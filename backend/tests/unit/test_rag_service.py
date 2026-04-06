@@ -16,7 +16,6 @@ import pytest
 
 from backend.chat.rag_service import ExplainResult, RagService, RetrievedDoc
 
-
 # ---------------------------------------------------------------------------
 # Shared test data
 # ---------------------------------------------------------------------------

@@ -3,10 +3,10 @@
 Production startup (via Dockerfile CMD):
     alembic upgrade head && gunicorn backend.main:app \\
         --worker-class uvicorn.workers.UvicornWorker \\
-        --workers 4 --bind 0.0.0.0:8000 --timeout 120
+        --workers 4 --bind 0.0.0.0:8006 --timeout 120
 
 Development (hot reload):
-    uvicorn backend.main:app --reload --reload-dir backend --port 8000
+    uvicorn backend.main:app --reload --reload-dir backend --port 8006
 
 The factory pattern (``create_app()``) enables easy test client instantiation:
     from fastapi.testclient import TestClient
@@ -40,16 +40,16 @@ sys.modules.setdefault("logic", _logic_pkg)
 sys.modules.setdefault("logic.smote_updated", _logic_smote)
 # ── End compatibility patch ─────────────────────────────────────────────────
 
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager  # noqa: E402
 
 from fastapi import FastAPI  # noqa: E402
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler  # noqa: E402
+from slowapi.errors import RateLimitExceeded  # noqa: E402
 
-from backend.api.dependencies import limiter
-from backend.api.middleware import RequestIDMiddleware
-from backend.api.routers import explain, health, predict, results
-from backend.logger.logger import get_logger
+from backend.api.dependencies import limiter  # noqa: E402
+from backend.api.middleware import RequestIDMiddleware  # noqa: E402
+from backend.api.routers import explain, health, predict, results  # noqa: E402
+from backend.logger.logger import get_logger  # noqa: E402
 
 logger = get_logger(__name__)
 
@@ -65,6 +65,7 @@ async def lifespan(app: FastAPI):
     logger.info("Pre-warming RAG engine (loading sentence-transformers from cache)...")
     try:
         import backend.chat.rag_engine  # noqa: F401 — side-effect import warms module cache
+
         logger.info("RAG engine ready.")
     except Exception as exc:  # noqa: BLE001
         logger.warning("RAG engine pre-warm failed (non-fatal): %s", exc)

@@ -30,8 +30,8 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 from backend.config.config import config
 from backend.logger.logger import get_logger
-from backend.services.db_utils import db_engine
 from backend.services.db_model import RagAuditLogDB
+from backend.services.db_utils import db_engine
 
 logger = get_logger(__name__)
 
@@ -223,9 +223,7 @@ def get_rag_explanation(
         job_id=job_id,
     )
     context = (
-        "\n".join(doc for _, doc, _ in retrieved_docs)
-        if retrieved_docs
-        else "No relevant feature definitions found."
+        "\n".join(doc for _, doc, _ in retrieved_docs) if retrieved_docs else "No relevant feature definitions found."
     )
 
     prompt_path = Path(config.prompt_path)

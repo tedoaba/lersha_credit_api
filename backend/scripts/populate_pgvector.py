@@ -30,7 +30,6 @@ import uuid
 from datetime import UTC, datetime
 
 from sentence_transformers import SentenceTransformer
-from sqlalchemy import insert
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -166,7 +165,7 @@ def populate_pgvector(batch_size: int = BATCH_SIZE) -> int:
     Raises:
         SystemExit: Exits with code 1 if any batch fails to insert.
     """
-    print(f"[INFO] Starting pgvector knowledge base population...")  # noqa: T201
+    print("[INFO] Starting pgvector knowledge base population...")  # noqa: T201
     print(f"[INFO] Loading sentence-transformer model '{config.embedder_model}'...")  # noqa: T201
 
     # Load model ONCE outside the loop to avoid repeated HuggingFace cache hits
@@ -193,7 +192,7 @@ def populate_pgvector(batch_size: int = BATCH_SIZE) -> int:
         batch_label = f"Batch {n_batches}"
 
         rows = []
-        for (feature_name, content, category), embedding in zip(batch_slice, batch_embeddings):
+        for (feature_name, content, category), embedding in zip(batch_slice, batch_embeddings, strict=False):
             rows.append(
                 {
                     "doc_id": uuid.uuid5(uuid.NAMESPACE_DNS, f"lersha.rag.{feature_name}"),

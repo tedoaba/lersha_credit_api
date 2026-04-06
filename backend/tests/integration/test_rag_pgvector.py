@@ -32,7 +32,6 @@ from sqlalchemy.orm import Session
 
 from backend.services.db_model import RagAuditLogDB, RagDocumentDB
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -182,13 +181,9 @@ class TestAuditLogPopulatedAfterRetrieval:
 
         with Session(pg_engine) as session:
             after_count = session.execute(text("SELECT count(*) FROM rag_audit_log")).scalar()
-            latest = session.execute(
-                text("SELECT * FROM rag_audit_log ORDER BY id DESC LIMIT 1")
-            ).fetchone()
+            latest = session.execute(text("SELECT * FROM rag_audit_log ORDER BY id DESC LIMIT 1")).fetchone()
 
-        assert after_count == before_count + 1, (
-            f"Expected exactly 1 new audit row, got {after_count - before_count}"
-        )
+        assert after_count == before_count + 1, f"Expected exactly 1 new audit row, got {after_count - before_count}"
         assert latest is not None
         assert latest.latency_ms is not None and latest.latency_ms >= 0
         assert latest.prediction == "Eligible"
@@ -213,21 +208,20 @@ class TestAuditLogOnEmptyRetrieval:
             before_count = session.execute(text("SELECT count(*) FROM rag_audit_log")).scalar()
 
         # Use threshold=0.9999 to guarantee no results exceed it
-        with patch("backend.chat.rag_engine.db_engine", return_value=pg_engine):
-            # Temporarily override threshold via config hyperparams patch
-            with patch(
+        with (
+            patch("backend.chat.rag_engine.db_engine", return_value=pg_engine),
+            patch(
                 "backend.chat.rag_engine.config.hyperparams",
                 {"inference": {"rag_top_k": 5, "rag_similarity_threshold": 0.9999}},
-            ):
-                results = retrieve_docs(query="xyzzy frobnosticator lorem ipsum dolor sit amet")
+            ),
+        ):
+            results = retrieve_docs(query="xyzzy frobnosticator lorem ipsum dolor sit amet")
 
         assert results == [], "Expected empty results when threshold is set to near-1.0"
 
         with Session(pg_engine) as session:
             after_count = session.execute(text("SELECT count(*) FROM rag_audit_log")).scalar()
-            latest = session.execute(
-                text("SELECT * FROM rag_audit_log ORDER BY id DESC LIMIT 1")
-            ).fetchone()
+            latest = session.execute(text("SELECT * FROM rag_audit_log ORDER BY id DESC LIMIT 1")).fetchone()
 
         assert after_count == before_count + 1, "Audit row must be written even when retrieval returns empty results"
         assert latest is not None

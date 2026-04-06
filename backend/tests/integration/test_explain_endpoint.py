@@ -25,7 +25,6 @@ from sqlalchemy.orm import Session
 from backend.main import create_app
 from backend.services.db_model import CreditScoringRecordDB, InferenceJobDB, RagAuditLogDB
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

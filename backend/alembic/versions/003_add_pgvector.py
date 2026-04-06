@@ -92,9 +92,7 @@ def upgrade() -> None:
     )
 
     # 5. B-tree index for category equality filter (pre-filters before ANN scan)
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_rag_documents_category ON rag_documents (category)"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS idx_rag_documents_category ON rag_documents (category)")
 
 
 def downgrade() -> None:
