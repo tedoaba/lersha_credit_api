@@ -116,8 +116,8 @@ def run_inferences(
         for idx in range(len(sample_encoded)):
             row = sample_encoded.iloc[[idx]]
 
-            prediction_class_index, prediction_class_name = predict_single_sample_data(
-                model, row, target_column, model_name
+            prediction_class_index, prediction_class_name, class_probabilities, confidence_score = (
+                predict_single_sample_data(model, row, target_column, model_name)
             )
             mlflow.log_metric(f"prediction_{idx}", float(prediction_class_index))
             mlflow.log_param(f"prediction_class_name_{idx}", prediction_class_name)
@@ -156,6 +156,8 @@ def run_inferences(
                     "top_feature_contributions": top10_list,
                     "rag_explanation": rag_explanation,
                     "model_name": model_name,
+                    "class_probabilities": class_probabilities,
+                    "confidence_score": confidence_score,
                 }
             )
 

@@ -115,7 +115,9 @@ def predict_single_sample_data(model, sample_data: pd.DataFrame, target_column: 
         model_name: Name of the model (used for logging only).
 
     Returns:
-        tuple: ``(prediction_class_index: int, prediction_class_name: str)``
+        tuple: ``(prediction_class_index, prediction_class_name, class_probabilities, confidence_score)``
+            - class_probabilities: dict mapping each class label to its probability.
+            - confidence_score: probability of the predicted class (0.0–1.0).
 
     Raises:
         ValueError: If ``model`` is ``None`` or ``sample_data`` has != 1 row.
@@ -129,14 +131,45 @@ def predict_single_sample_data(model, sample_data: pd.DataFrame, target_column: 
     if len(sample_data) != 1:
         raise ValueError(f"predict_single_sample_data supports ONE row only; got {len(sample_data)}")
 
-    prediction = model.predict(sample_data)
-    prediction_class_index = int(np.argmax(prediction))
-
     label_classes = load_features(target_column)
-    prediction_class_name = label_classes[prediction_class_index]
 
-    logger.info("Prediction: index=%d, class=%s (model=%s)", prediction_class_index, prediction_class_name, model_name)
-    return prediction_class_index, prediction_class_name
+    # Use predict_proba() as the single source of truth when available.
+    # This ensures the predicted class always matches the highest probability.
+    class_probabilities: dict[str, float] = {}
+    confidence_score: float = 0.0
+    proba = None
+    try:
+        if hasattr(model, "predict_proba"):
+            proba = model.predict_proba(sample_data)
+        elif hasattr(model, "named_steps") and hasattr(model.named_steps.get("model", None), "predict_proba"):
+            from sklearn.pipeline import Pipeline as SkPipeline
+
+            preprocess_steps = [
+                (name, step) for name, step in model.named_steps.items() if name != "model"
+            ]
+            preprocess_pipeline = SkPipeline(preprocess_steps)
+            X_transformed = preprocess_pipeline.transform(sample_data)
+            proba = model.named_steps["model"].predict_proba(X_transformed)
+    except Exception as exc:
+        logger.warning("Could not extract probabilities (model=%s): %s", model_name, exc)
+
+    if proba is not None:
+        prob_array = proba[0]
+        prediction_class_index = int(np.argmax(prob_array))
+        prediction_class_name = label_classes[prediction_class_index]
+        class_probabilities = {label_classes[i]: float(prob_array[i]) for i in range(len(label_classes))}
+        confidence_score = float(prob_array[prediction_class_index])
+    else:
+        # Fallback to model.predict() when probabilities are unavailable
+        prediction = model.predict(sample_data)
+        prediction_class_index = int(np.argmax(prediction))
+        prediction_class_name = label_classes[prediction_class_index]
+
+    logger.info(
+        "Prediction: index=%d, class=%s, confidence=%.3f (model=%s)",
+        prediction_class_index, prediction_class_name, confidence_score, model_name,
+    )
+    return prediction_class_index, prediction_class_name, class_probabilities, confidence_score
 
 
 def build_contribution_table(sample_data: pd.DataFrame, shap_values, pred_class_index: int) -> pd.DataFrame:
