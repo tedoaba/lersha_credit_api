@@ -165,6 +165,7 @@ export default function DashboardPanel() {
                         ))}
                       </Pie>
                       <Tooltip
+                        cursor={false}
                         formatter={(value: number, name: string) => [
                           `${value} farmer${value !== 1 ? "s" : ""}`,
                           name,
@@ -187,7 +188,7 @@ export default function DashboardPanel() {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="decision" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip />
+                    <Tooltip cursor={false} />
                     <Legend />
                     {modelNames.map((m, i) => (
                       <Bar
@@ -215,11 +216,11 @@ export default function DashboardPanel() {
                       <CartesianGrid strokeDasharray="3 3" vertical={false} />
                       <XAxis dataKey="gender" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} />
-                      <Tooltip />
+                      <Tooltip cursor={false} />
                       <Legend />
-                      <Bar dataKey="Eligible" fill="#10b981" stackId="a" />
-                      <Bar dataKey="Review" fill="#f59e0b" stackId="a" />
-                      <Bar dataKey="Not Eligible" fill="#ef4444" stackId="a" />
+                      <Bar dataKey="Eligible" fill={DECISION_COLORS["Eligible"]} stackId="a" />
+                      <Bar dataKey="Review" fill={DECISION_COLORS["Review"]} stackId="a" />
+                      <Bar dataKey="Not Eligible" fill={DECISION_COLORS["Not Eligible"]} stackId="a" />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
