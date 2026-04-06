@@ -382,3 +382,144 @@ def get_all_results(limit: int = 500, model_name: str | None = None) -> list[dic
     with engine.connect() as conn:
         df = pd.read_sql(query, conn, params=params)
     return df.to_dict(orient="records")
+
+
+def get_results_paginated(
+    *,
+    page: int = 1,
+    per_page: int = 20,
+    search: str | None = None,
+    decision: str | None = None,
+    gender: str | None = None,
+    model_name: str | None = None,
+) -> dict:
+    """Fetch evaluation records with pagination, search, and filters.
+
+    Joins candidate_result with farmer_data_all to get gender.
+
+    Returns:
+        dict with ``total``, ``page``, ``per_page``, ``records`` keys.
+    """
+    engine = db_engine()
+    farmer_table = config.farmer_data_all
+
+    where_clauses: list[str] = []
+    params: dict[str, Any] = {}
+
+    if search:
+        where_clauses.append(
+            "(cr.first_name ILIKE :search OR cr.last_name ILIKE :search "
+            "OR cr.farmer_uid ILIKE :search)"
+        )
+        params["search"] = f"%{search}%"
+    if decision:
+        where_clauses.append("cr.predicted_class_name = :decision")
+        params["decision"] = decision
+    if model_name:
+        where_clauses.append("cr.model_name = :model_name")
+        params["model_name"] = model_name
+    if gender:
+        where_clauses.append("LOWER(fd.gender) = LOWER(:gender)")
+        params["gender"] = gender
+
+    where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+    # Count query
+    count_sql = text(
+        f"SELECT COUNT(*) FROM candidate_result cr "  # noqa: S608
+        f"LEFT JOIN {farmer_table} fd ON cr.farmer_uid = fd.farmer_uid "
+        f"{where_sql}"
+    )
+    # Data query with pagination
+    offset = (page - 1) * per_page
+    data_sql = text(
+        f"SELECT cr.*, fd.gender FROM candidate_result cr "  # noqa: S608
+        f"LEFT JOIN {farmer_table} fd ON cr.farmer_uid = fd.farmer_uid "
+        f"{where_sql} "
+        f"ORDER BY cr.timestamp DESC LIMIT :per_page OFFSET :offset"
+    )
+    params["per_page"] = per_page
+    params["offset"] = offset
+
+    with engine.connect() as conn:
+        total = conn.execute(count_sql, params).scalar() or 0
+        df = pd.read_sql(data_sql, conn, params=params)
+
+    return {
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "records": df.to_dict(orient="records"),
+    }
+
+
+def get_analytics_summary() -> dict:
+    """Aggregate counts for the dashboard: by decision and by gender.
+
+    Joins candidate_result with farmer_data_all to get gender.
+    """
+    engine = db_engine()
+    farmer_table = config.farmer_data_all
+
+    by_decision_sql = text(
+        "SELECT predicted_class_name, COUNT(*) as count "
+        "FROM candidate_result GROUP BY predicted_class_name"
+    )
+    by_gender_decision_sql = text(
+        f"SELECT COALESCE(fd.gender, 'Unknown') as gender, "  # noqa: S608
+        f"cr.predicted_class_name, COUNT(*) as count "
+        f"FROM candidate_result cr "
+        f"LEFT JOIN {farmer_table} fd ON cr.farmer_uid = fd.farmer_uid "
+        f"GROUP BY fd.gender, cr.predicted_class_name"
+    )
+    recent_sql = text(
+        f"SELECT cr.*, fd.gender FROM candidate_result cr "  # noqa: S608
+        f"LEFT JOIN {farmer_table} fd ON cr.farmer_uid = fd.farmer_uid "
+        f"ORDER BY cr.timestamp DESC LIMIT 10"
+    )
+
+    with engine.connect() as conn:
+        # Total
+        total_row = conn.execute(text("SELECT COUNT(*) FROM candidate_result")).scalar() or 0
+
+        # By decision
+        decision_df = pd.read_sql(by_decision_sql, conn)
+        by_decision = dict(zip(decision_df["predicted_class_name"], decision_df["count"], strict=True))
+
+        # By gender x decision
+        gd_df = pd.read_sql(by_gender_decision_sql, conn)
+        by_gender: dict[str, dict[str, int]] = {}
+        for _, row in gd_df.iterrows():
+            g = str(row["gender"])
+            d = str(row["predicted_class_name"])
+            by_gender.setdefault(g, {})[d] = int(row["count"])
+
+        # Recent
+        recent_df = pd.read_sql(recent_sql, conn)
+        recent = recent_df.to_dict(orient="records")
+
+    return {
+        "total": int(total_row),
+        "by_decision": by_decision,
+        "by_gender": by_gender,
+        "recent": recent,
+    }
+
+
+def get_recent_jobs(limit: int = 20) -> list[dict]:
+    """Fetch the most recent inference jobs.
+
+    Args:
+        limit: Maximum number of jobs to return.
+
+    Returns:
+        list[dict]: Serialisable list of job records.
+    """
+    engine = db_engine()
+    query = text(
+        "SELECT job_id, status, error, created_at, completed_at "
+        "FROM inference_jobs ORDER BY created_at DESC LIMIT :lim"
+    )
+    with engine.connect() as conn:
+        df = pd.read_sql(query, conn, params={"lim": limit})
+    return df.to_dict(orient="records")

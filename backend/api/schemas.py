@@ -86,6 +86,7 @@ class ResultsRecord(BaseModel):
     rag_explanation: str
     model_name: str
     timestamp: datetime | None = None
+    gender: str | None = None
 
 
 class ResultsResponse(BaseModel):
@@ -93,6 +94,46 @@ class ResultsResponse(BaseModel):
 
     total: int
     records: list[ResultsRecord]
+
+
+class PaginatedResultsResponse(BaseModel):
+    """Response body for GET /v1/results with pagination."""
+
+    total: int
+    page: int
+    per_page: int
+    records: list[ResultsRecord]
+
+
+# ── Analytics endpoint ────────────────────────────────────────────────────────
+
+
+class AnalyticsSummaryResponse(BaseModel):
+    """Response body for GET /v1/analytics/summary."""
+
+    total: int
+    by_decision: dict[str, int]
+    by_gender: dict[str, dict[str, int]]
+    recent: list[ResultsRecord]
+
+
+# ── Jobs list endpoint ────────────────────────────────────────────────────────
+
+
+class JobRecord(BaseModel):
+    """A single inference job record."""
+
+    job_id: str
+    status: str
+    error: str | None = None
+    created_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+class JobsListResponse(BaseModel):
+    """Response body for GET /v1/jobs."""
+
+    jobs: list[JobRecord]
 
 
 # ── Explain endpoint ───────────────────────────────────────────────────────────
