@@ -57,7 +57,7 @@ export default function HomePage() {
         </TabsContent>
 
         <TabsContent value="predict" className="pt-4">
-          <PredictPanel onCompleted={() => setActiveTab("farmers")} />
+          <PredictPanel />
         </TabsContent>
       </Tabs>
     </div>

@@ -8,7 +8,7 @@ export async function GET(request: Request) {
 
   // Forward all query params to backend
   const params = new URLSearchParams();
-  for (const key of ["limit", "model_name", "page", "per_page", "search", "decision", "gender"]) {
+  for (const key of ["limit", "model_name", "page", "per_page", "search", "decision", "gender", "job_id"]) {
     const val = searchParams.get(key);
     if (val) params.set(key, val);
   }
