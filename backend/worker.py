@@ -77,7 +77,8 @@ def run_inference_task(job_id: str, payload: dict) -> None:
     # Deferred imports — ML stack only loaded inside the actual Celery worker process
     from backend.core.pipeline import match_inputs, run_inferences  # noqa: PLC0415
 
-    logger.info("Worker picked up job '%s' (source=%s)", job_id, payload.get("source"))
+    request_id = payload.pop("_request_id", None)
+    logger.info("Worker picked up job '%s' (source=%s, request_id=%s)", job_id, payload.get("source"), request_id)
 
     try:
         db_utils.update_job_status(job_id, "processing")

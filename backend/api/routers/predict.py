@@ -70,14 +70,16 @@ async def submit_prediction(
     job_id = str(uuid.uuid4())
     db_utils.create_job(job_id)
 
+    payload = {**item.dict(), "_request_id": getattr(request.state, "request_id", None)}
+
     if _EAGER_MODE:
         # Dev mode: run inference in a background thread after 202 is returned.
         # This avoids blocking the HTTP request while inference runs (~30–120 s).
-        background_tasks.add_task(_run_inference_background, job_id, item.dict())
+        background_tasks.add_task(_run_inference_background, job_id, payload)
         logger.info("Inference job '%s' queued via BackgroundTasks (eager/dev mode, source=%s)", job_id, item.source)
     else:
         # Production: dispatch to Celery worker via Redis broker.
-        run_inference_task.delay(job_id, item.dict())
+        run_inference_task.delay(job_id, payload)
         logger.info("Inference job '%s' dispatched to Celery (source=%s)", job_id, item.source)
 
     return JobAcceptedResponse(job_id=job_id)
