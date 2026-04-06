@@ -53,7 +53,6 @@ function formatFeatureName(name: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-/** Inline dot legend — avoids Recharts default which takes too much space */
 function DotLegend({ items }: { items: { label: string; color: string }[] }) {
   return (
     <div className="flex items-center justify-center gap-3 mt-1">
@@ -70,7 +69,6 @@ function DotLegend({ items }: { items: { label: string; color: string }[] }) {
   );
 }
 
-/** Compact chart card with hover shadow lift */
 function ChartCard({
   title,
   subtitle,
@@ -95,7 +93,6 @@ function ChartCard({
   );
 }
 
-/** Center label for donut charts — shows key metric inside the hole */
 function DonutCenterLabel({ viewBox, line1, line2 }: { viewBox?: { cx: number; cy: number }; line1: string; line2: string }) {
   if (!viewBox) return null;
   const { cx, cy } = viewBox;
@@ -171,6 +168,7 @@ export default function DashboardPanel() {
   }, [analytics?.top_risk_factors]);
 
   const topEligiblePct = totalFarmers > 0 ? Math.round((consensusEligible / totalFarmers) * 100) : 0;
+  const shapSlice = topRiskFactors.slice(0, 12);
 
   return (
     <div className="space-y-4">
@@ -233,14 +231,14 @@ export default function DashboardPanel() {
             </div>
           </div>
 
-          {/* ─── Charts — 3×2 balanced grid ────────────────────────────────── */}
+          {/* ─── Analytics — 3-col grid, SHAP spans 2 rows in col 3 ─────── */}
           <div>
             <h2 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">
               Analytics
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
 
-              {/* 1 — Consensus donut */}
+              {/* Row 1, Col 1 — Consensus */}
               <ChartCard
                 title="Farmer Consensus"
                 subtitle={`Decision across ${modelNames.map(formatModelName).join(" & ")}`}
@@ -264,18 +262,9 @@ export default function DashboardPanel() {
                           {pieData.map((entry) => (
                             <Cell key={entry.name} fill={DECISION_COLORS[entry.name] ?? "#94a3b8"} />
                           ))}
-                          <Label
-                            content={<DonutCenterLabel line1={`${topEligiblePct}%`} line2="eligible" />}
-                            position="center"
-                          />
+                          <Label content={<DonutCenterLabel line1={`${topEligiblePct}%`} line2="eligible" />} position="center" />
                         </Pie>
-                        <Tooltip
-                          cursor={false}
-                          formatter={(value: number, name: string) => [
-                            `${value} farmer${value !== 1 ? "s" : ""}`,
-                            name,
-                          ]}
-                        />
+                        <Tooltip cursor={false} formatter={(value: number, name: string) => [`${value} farmer${value !== 1 ? "s" : ""}`, name]} />
                       </PieChart>
                     </ResponsiveContainer>
                     <DotLegend items={pieData.map((d) => ({ label: d.name, color: DECISION_COLORS[d.name] ?? "#94a3b8" }))} />
@@ -283,11 +272,8 @@ export default function DashboardPanel() {
                 )}
               </ChartCard>
 
-              {/* 2 — Gender breakdown */}
-              <ChartCard
-                title="Gender Breakdown"
-                subtitle="Decision distribution by gender"
-              >
+              {/* Row 1, Col 2 — Gender */}
+              <ChartCard title="Gender Breakdown" subtitle="Decision distribution by gender">
                 {genderData.length === 0 ? (
                   <p className="text-[10px] text-muted-foreground text-center py-4">No data yet</p>
                 ) : (
@@ -298,7 +284,7 @@ export default function DashboardPanel() {
                         <XAxis dataKey="gender" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
                         <YAxis tick={{ fontSize: 9 }} width={28} axisLine={false} tickLine={false} />
                         <Tooltip cursor={{ fill: "rgba(0,0,0,0.04)" }} />
-                        <Bar dataKey="Eligible" fill={DECISION_COLORS["Eligible"]} stackId="a" radius={[0, 0, 0, 0]} />
+                        <Bar dataKey="Eligible" fill={DECISION_COLORS["Eligible"]} stackId="a" />
                         <Bar dataKey="Review" fill={DECISION_COLORS["Review"]} stackId="a" />
                         <Bar dataKey="Not Eligible" fill={DECISION_COLORS["Not Eligible"]} stackId="a" radius={[3, 3, 0, 0]} />
                       </BarChart>
@@ -308,125 +294,35 @@ export default function DashboardPanel() {
                 )}
               </ChartCard>
 
-              {/* 3 — Model Agreement */}
-              <ChartCard
-                title="Model Agreement"
-                subtitle="How often all models agree"
-              >
-                <>
-                  <ResponsiveContainer width="100%" height={150}>
-                    <PieChart>
-                      <Pie
-                        data={agreementPieData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={38}
-                        outerRadius={62}
-                        dataKey="value"
-                        paddingAngle={2}
-                        stroke="none"
-                      >
-                        {agreementPieData.map((entry) => (
-                          <Cell key={entry.name} fill={AGREEMENT_COLORS[entry.name] ?? "#94a3b8"} />
-                        ))}
-                        <Label
-                          content={<DonutCenterLabel line1={`${agreementRate}%`} line2="agreed" />}
-                          position="center"
-                        />
-                      </Pie>
-                      <Tooltip
-                        cursor={false}
-                        formatter={(value: number, name: string) => [
-                          `${value} farmer${value !== 1 ? "s" : ""}`,
-                          name,
-                        ]}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <DotLegend items={[{ label: "Agreed", color: AGREEMENT_COLORS.Agreed }, { label: "Mixed", color: AGREEMENT_COLORS.Mixed }]} />
-                </>
-              </ChartCard>
-
-              {/* 4 — Confidence Distribution */}
-              <ChartCard
-                title="Confidence Distribution"
-                subtitle="How certain models are about predictions"
-              >
-                {confidenceData.length === 0 ? (
-                  <p className="text-[10px] text-muted-foreground text-center py-4">No data yet</p>
-                ) : (
-                  <>
-                    <ResponsiveContainer width="100%" height={150}>
-                      <BarChart data={confidenceData} margin={{ top: 5, right: 5, bottom: 0, left: -10 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                        <XAxis dataKey="range" tick={{ fontSize: 8 }} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fontSize: 9 }} width={24} axisLine={false} tickLine={false} />
-                        <Tooltip
-                          cursor={{ fill: "rgba(0,0,0,0.04)" }}
-                          formatter={(value: number) => [`${value}`, "Count"]}
-                        />
-                        <Bar dataKey="count" radius={[3, 3, 0, 0]}>
-                          {confidenceData.map((entry, i) => {
-                            const ratio = i / Math.max(confidenceData.length - 1, 1);
-                            const color = ratio < 0.4 ? CONFIDENCE_COLORS.Low : ratio < 0.7 ? CONFIDENCE_COLORS.Medium : CONFIDENCE_COLORS.High;
-                            return <Cell key={entry.range} fill={color} />;
-                          })}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                    <DotLegend items={Object.entries(CONFIDENCE_COLORS).map(([l, c]) => ({ label: l, color: c }))} />
-                  </>
-                )}
-              </ChartCard>
-
-              {/* 5 — Model Comparison */}
-              <ChartCard
-                title="Model Comparison"
-                subtitle="Side-by-side decisions per model"
-              >
-                <>
-                  <ResponsiveContainer width="100%" height={150}>
-                    <BarChart data={comparisonData} margin={{ top: 5, right: 5, bottom: 0, left: -10 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                      <XAxis dataKey="decision" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 9 }} width={24} axisLine={false} tickLine={false} />
-                      <Tooltip cursor={{ fill: "rgba(0,0,0,0.04)" }} />
-                      {modelNames.map((m, i) => (
-                        <Bar
-                          key={m}
-                          dataKey={formatModelName(m)}
-                          fill={MODEL_COLORS[i % MODEL_COLORS.length]}
-                          radius={[3, 3, 0, 0]}
-                        />
-                      ))}
-                    </BarChart>
-                  </ResponsiveContainer>
-                  <DotLegend items={modelNames.map((m, i) => ({ label: formatModelName(m), color: MODEL_COLORS[i % MODEL_COLORS.length] }))} />
-                </>
-              </ChartCard>
-
-              {/* 6 — SHAP Top Risk Factors (fills the last grid slot) */}
+              {/* Row 1-2, Col 3 — SHAP (spans 2 rows) */}
               <ChartCard
                 title="Top Risk Factors"
                 subtitle="SHAP feature impact on credit decisions"
+                className="xl:row-span-3"
               >
                 {topRiskFactors.length === 0 ? (
                   <p className="text-[10px] text-muted-foreground text-center py-4">No data yet</p>
                 ) : (
                   <>
-                    <ResponsiveContainer width="100%" height={150}>
+                    <ResponsiveContainer width="100%" height={shapSlice.length * 32 + 40}>
                       <BarChart
-                        data={topRiskFactors.slice(0, 6)}
+                        data={shapSlice}
                         layout="vertical"
-                        margin={{ left: 0, right: 10, top: 2, bottom: 2 }}
+                        margin={{ left: 0, right: 10, top: 5, bottom: 10 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
-                        <XAxis type="number" tick={{ fontSize: 8 }} axisLine={false} tickLine={false} />
+                        <XAxis
+                          type="number"
+                          tick={{ fontSize: 9 }}
+                          axisLine={false}
+                          tickLine={false}
+                          label={{ value: "Mean |SHAP value|", position: "bottom", offset: -2, style: { fontSize: 9, fill: "#888" } }}
+                        />
                         <YAxis
                           type="category"
                           dataKey="feature"
-                          tick={{ fontSize: 9 }}
-                          width={100}
+                          tick={{ fontSize: 10 }}
+                          width={110}
                           axisLine={false}
                           tickLine={false}
                         />
@@ -439,7 +335,7 @@ export default function DashboardPanel() {
                         />
                         <ReferenceLine x={0} stroke="#d4d4d8" />
                         <Bar dataKey="value" radius={[0, 3, 3, 0]}>
-                          {topRiskFactors.slice(0, 6).map((entry) => (
+                          {shapSlice.map((entry) => (
                             <Cell
                               key={entry.feature}
                               fill={entry.value > 0 ? SHAP_COLORS.increases_risk : SHAP_COLORS.reduces_risk}
@@ -454,6 +350,73 @@ export default function DashboardPanel() {
                     ]} />
                   </>
                 )}
+              </ChartCard>
+
+              {/* Row 2, Col 1 — Agreement */}
+              <ChartCard title="Model Agreement" subtitle="How often all models agree">
+                <ResponsiveContainer width="100%" height={150}>
+                  <PieChart>
+                    <Pie
+                      data={agreementPieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={38}
+                      outerRadius={62}
+                      dataKey="value"
+                      paddingAngle={2}
+                      stroke="none"
+                    >
+                      {agreementPieData.map((entry) => (
+                        <Cell key={entry.name} fill={AGREEMENT_COLORS[entry.name] ?? "#94a3b8"} />
+                      ))}
+                      <Label content={<DonutCenterLabel line1={`${agreementRate}%`} line2="agreed" />} position="center" />
+                    </Pie>
+                    <Tooltip cursor={false} formatter={(value: number, name: string) => [`${value} farmer${value !== 1 ? "s" : ""}`, name]} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <DotLegend items={[{ label: "Agreed", color: AGREEMENT_COLORS.Agreed }, { label: "Mixed", color: AGREEMENT_COLORS.Mixed }]} />
+              </ChartCard>
+
+              {/* Row 2, Col 2 — Confidence */}
+              <ChartCard title="Confidence Distribution" subtitle="Model prediction certainty">
+                {confidenceData.length === 0 ? (
+                  <p className="text-[10px] text-muted-foreground text-center py-4">No data yet</p>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height={150}>
+                      <BarChart data={confidenceData} margin={{ top: 5, right: 5, bottom: 0, left: -10 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                        <XAxis dataKey="range" tick={{ fontSize: 8 }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 9 }} width={24} axisLine={false} tickLine={false} />
+                        <Tooltip cursor={{ fill: "rgba(0,0,0,0.04)" }} formatter={(value: number) => [`${value}`, "Count"]} />
+                        <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+                          {confidenceData.map((entry, i) => {
+                            const ratio = i / Math.max(confidenceData.length - 1, 1);
+                            const color = ratio < 0.4 ? CONFIDENCE_COLORS.Low : ratio < 0.7 ? CONFIDENCE_COLORS.Medium : CONFIDENCE_COLORS.High;
+                            return <Cell key={entry.range} fill={color} />;
+                          })}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                    <DotLegend items={Object.entries(CONFIDENCE_COLORS).map(([l, c]) => ({ label: l, color: c }))} />
+                  </>
+                )}
+              </ChartCard>
+
+              {/* Row 3, Col 1-2 — Model Comparison */}
+              <ChartCard title="Model Comparison" subtitle="Side-by-side decisions per model" className="sm:col-span-2 xl:col-span-2">
+                <ResponsiveContainer width="100%" height={150}>
+                  <BarChart data={comparisonData} margin={{ top: 5, right: 5, bottom: 0, left: -10 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                    <XAxis dataKey="decision" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 9 }} width={24} axisLine={false} tickLine={false} />
+                    <Tooltip cursor={{ fill: "rgba(0,0,0,0.04)" }} />
+                    {modelNames.map((m, i) => (
+                      <Bar key={m} dataKey={formatModelName(m)} fill={MODEL_COLORS[i % MODEL_COLORS.length]} radius={[3, 3, 0, 0]} />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+                <DotLegend items={modelNames.map((m, i) => ({ label: formatModelName(m), color: MODEL_COLORS[i % MODEL_COLORS.length] }))} />
               </ChartCard>
             </div>
           </div>
