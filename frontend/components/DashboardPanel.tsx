@@ -2,7 +2,7 @@
 
 import { useAnalytics } from "@/lib/queries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle, AlertTriangle, XCircle, Users, HelpCircle } from "lucide-react";
+import { CheckCircle, AlertTriangle, XCircle, Users } from "lucide-react";
 import {
   PieChart,
   Pie,
@@ -21,7 +21,6 @@ const DECISION_COLORS: Record<string, string> = {
   Eligible: "#2d8a4e",
   Review: "#c9a84c",
   "Not Eligible": "#dc3545",
-  Mixed: "#7c5cbf",
 };
 
 const MODEL_COLORS = ["#2d8a4e", "#c9a84c", "#4caf50", "#8b6f3a", "#5a9e6f"];
@@ -42,13 +41,10 @@ export default function DashboardPanel() {
   const consensusEligible = byConsensus["Eligible"] ?? 0;
   const consensusReview = byConsensus["Review"] ?? 0;
   const consensusNotEligible = byConsensus["Not Eligible"] ?? 0;
-  const consensusMixed = byConsensus["Mixed"] ?? 0;
-
   const pieData = [
     { name: "Eligible", value: consensusEligible },
     { name: "Review", value: consensusReview },
     { name: "Not Eligible", value: consensusNotEligible },
-    { name: "Mixed", value: consensusMixed },
   ].filter((d) => d.value > 0);
 
   // Model comparison data
@@ -103,7 +99,7 @@ export default function DashboardPanel() {
       {analytics && modelNames.length > 0 && (
         <>
           {/* KPI tiles — farmer-level consensus with per-model breakdown */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiTile
               label="Farmers Scored"
               value={totalFarmers}
@@ -133,13 +129,6 @@ export default function DashboardPanel() {
               details={modelStats.map((m) => `${m.label}: ${m.notEligible}`)}
               icon={<XCircle className="h-4 w-4 text-red-500" />}
               colorClass="text-red-600 dark:text-red-400"
-            />
-            <KpiTile
-              label="Mixed"
-              value={consensusMixed}
-              subtitle={totalFarmers > 0 && consensusMixed > 0 ? `${((consensusMixed / totalFarmers) * 100).toFixed(1)}%` : undefined}
-              icon={<HelpCircle className="h-4 w-4 text-purple-500" />}
-              colorClass="text-purple-600 dark:text-purple-400"
             />
           </div>
 
