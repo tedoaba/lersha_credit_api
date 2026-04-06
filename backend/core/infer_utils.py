@@ -12,10 +12,10 @@ Dead code removed in monorepo refactor (2026-03-29):
 
 import contextlib
 import json
-from datetime import datetime
 
 import joblib
 import matplotlib
+
 matplotlib.use("Agg")  # non-interactive, thread-safe — must be before pyplot import
 import matplotlib.pyplot as plt  # noqa: E402
 import mlflow
@@ -23,7 +23,6 @@ import mlflow.sklearn
 import numpy as np
 import pandas as pd
 import shap
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score, roc_auc_score
 
 from backend.config.config import config
 from backend.core.feature_engineering import apply_feature_engineering  # noqa: F401 (re-exported for pipeline)
@@ -46,20 +45,6 @@ def get_candidate_data(df: pd.DataFrame, columns_to_select: list) -> pd.DataFram
     sample_data = df.drop(columns=[config.id_column], errors="ignore")
     sample_data = sample_data[columns_to_select]
     logger.info("Candidate data shape: %s", sample_data.shape)
-    return sample_data
-
-
-def get_featured_data(df: pd.DataFrame) -> pd.DataFrame:
-    """Drop the ID column and return all remaining feature columns.
-
-    Args:
-        df: Input DataFrame.
-
-    Returns:
-        pd.DataFrame: DataFrame without the farmer UID column.
-    """
-    sample_data = df.drop(columns=[config.id_column], errors="ignore")
-    logger.info("Featured data shape: %s", sample_data.shape)
     return sample_data
 
 
@@ -120,86 +105,6 @@ def load_prediction_models(model_name: str) -> object:
         ) from exc
 
 
-def xgb_model_evaluation(model, X, y, dataset_name: str = "Dataset"):
-    """Evaluate an XGBoost model and log metrics to the logger.
-
-    Args:
-        model: Trained model with ``predict`` and ``predict_proba`` methods.
-        X: Feature matrix.
-        y: True target labels.
-        dataset_name: Label for log messages (e.g. ``"Train"`` or ``"Test"``).
-
-    Returns:
-        tuple: ``(y_pred, accuracy, f1, roc_auc)``
-    """
-    y_pred = model.predict(X)
-    accuracy = accuracy_score(y, y_pred)
-    f1 = f1_score(y, y_pred, average="weighted")
-    roc_auc = roc_auc_score(y, model.predict_proba(X), multi_class="ovr")
-
-    logger.info("%s — Accuracy: %.4f | F1: %.4f | ROC-AUC: %.4f", dataset_name, accuracy, f1, roc_auc)
-    return y_pred, accuracy, f1, roc_auc
-
-
-def generate_classification_report(y_true, y_pred) -> dict:
-    """Return sklearn classification report as a dictionary.
-
-    Args:
-        y_true: Ground truth labels.
-        y_pred: Predicted labels.
-
-    Returns:
-        dict: Classification report from sklearn.
-    """
-    report = classification_report(y_true, y_pred, output_dict=True)
-    logger.info("Classification Report generated")
-    return report
-
-
-def log_model_reports(report: dict) -> None:
-    """Log per-class metrics to MLflow.
-
-    Args:
-        report: Dictionary from ``generate_classification_report``.
-    """
-    for label, metrics in report.items():
-        if isinstance(metrics, dict):
-            for metric_name, value in metrics.items():
-                mlflow.log_metric(f"{label}_{metric_name}", value)
-    logger.info("Model reports logged to MLflow")
-
-
-def generate_confusion_matrix(y_true, y_pred):
-    """Compute and log the confusion matrix.
-
-    Args:
-        y_true: Ground truth labels.
-        y_pred: Predicted labels.
-
-    Returns:
-        np.ndarray: Confusion matrix.
-    """
-    conf_matrix = confusion_matrix(y_true, y_pred)
-    logger.info("Confusion Matrix:\n%s", conf_matrix)
-    return conf_matrix
-
-
-def define_shap_explainer(model, X_encoded):
-    """Create a SHAP Explainer and compute SHAP values.
-
-    Args:
-        model: Trained model.
-        X_encoded: Encoded feature matrix.
-
-    Returns:
-        tuple: ``(explainer, shap_values)``
-    """
-    explainer = shap.Explainer(model)
-    shap_values = explainer(X_encoded)
-    logger.info("SHAP explainer created")
-    return explainer, shap_values
-
-
 def predict_single_sample_data(model, sample_data: pd.DataFrame, target_column: str, model_name: str):
     """Predict the credit class for exactly ONE row of data.
 
@@ -232,28 +137,6 @@ def predict_single_sample_data(model, sample_data: pd.DataFrame, target_column: 
 
     logger.info("Prediction: index=%d, class=%s (model=%s)", prediction_class_index, prediction_class_name, model_name)
     return prediction_class_index, prediction_class_name
-
-
-def generate_shap_for_sample(sample_data: pd.DataFrame, shap_values, model_name: str) -> None:
-    """Save a SHAP summary bar plot for a single sample prediction.
-
-    Args:
-        sample_data: Single-row DataFrame used for prediction.
-        shap_values: SHAP Explanation object from the explainer.
-        model_name: Used when constructing the output file path.
-    """
-    plt.figure(figsize=(12, 8))
-    shap.summary_plot(shap_values.values, sample_data, plot_type="bar", show=False)
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    shap_path = f"{config.shap_path}_{model_name}_single_sample_{timestamp}.png"
-
-    plt.savefig(shap_path, bbox_inches="tight")
-    plt.close()
-    logger.info("SHAP sample plot saved: %s", shap_path)
-
-    with contextlib.suppress(Exception):
-        mlflow.log_artifact(shap_path)
 
 
 def build_contribution_table(sample_data: pd.DataFrame, shap_values, pred_class_index: int) -> pd.DataFrame:
