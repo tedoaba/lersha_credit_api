@@ -138,6 +138,9 @@ export default function DashboardPanel() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Farmer Consensus</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Agreed decision across {modelNames.map(formatModelName).join(" & ")}
+                </p>
               </CardHeader>
               <CardContent>
                 {pieData.length === 0 ? (
@@ -206,6 +209,9 @@ export default function DashboardPanel() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Gender Breakdown</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Combined across {modelNames.map(formatModelName).join(" & ")}
+                </p>
               </CardHeader>
               <CardContent>
                 {genderData.length === 0 ? (
