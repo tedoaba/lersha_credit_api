@@ -95,7 +95,7 @@ export default function FarmersPanel() {
     <div className="space-y-6">
       {/* Section Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold tracking-tight">Farmers</h2>
+        <h2 className="text-2xl font-bold tracking-tight">Farmers</h2>
         <Button onClick={openPredictionModal} className="gap-1.5">
           <Plus className="h-4 w-4" />
           New Prediction
@@ -103,7 +103,7 @@ export default function FarmersPanel() {
       </div>
 
       {/* Search and Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
         <form onSubmit={handleSearch} className="flex gap-2 flex-1 max-w-md">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -183,17 +183,17 @@ export default function FarmersPanel() {
 
       {data && data.total > 0 && (
         <>
-          <div className="rounded-md border">
+          <div className="rounded-md border bg-white dark:bg-card">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-10">#</TableHead>
-                  <TableHead>Farmer</TableHead>
-                  <TableHead className="hidden sm:table-cell">Gender</TableHead>
+                  <TableHead className="w-10 text-sm font-bold">#</TableHead>
+                  <TableHead className="text-sm font-bold">Farmer</TableHead>
+                  <TableHead className="hidden sm:table-cell text-sm font-bold">Gender</TableHead>
                   {modelColumns.map((col) => (
-                    <TableHead key={col}>{formatModelName(col)}</TableHead>
+                    <TableHead key={col} className="text-sm font-bold">{formatModelName(col)}</TableHead>
                   ))}
-                  <TableHead className="hidden md:table-cell">Scored at</TableHead>
+                  <TableHead className="hidden md:table-cell text-sm font-bold">Scored at</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
