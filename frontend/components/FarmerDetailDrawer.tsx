@@ -1,11 +1,12 @@
 "use client";
 
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import DecisionBadge from "@/components/DecisionBadge";
 import FeatureContribChart from "@/components/FeatureContribChart";
@@ -30,22 +31,22 @@ export default function FarmerDetailDrawer({ record, open, onClose }: FarmerDeta
     : "\u2014";
 
   return (
-    <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <SheetContent className="w-full sm:max-w-2xl lg:max-w-3xl overflow-y-auto">
-        <SheetHeader className="pb-4">
-          <div className="flex items-start justify-between gap-3">
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent className="sm:max-w-3xl lg:max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <div className="flex items-start justify-between gap-3 pr-6">
             <div>
-              <SheetTitle className="text-lg">{formatName(record)}</SheetTitle>
-              <p className="text-sm text-muted-foreground font-mono mt-0.5">
+              <DialogTitle className="text-lg">{formatName(record)}</DialogTitle>
+              <DialogDescription className="font-mono mt-0.5">
                 {record.farmer_uid}
-              </p>
+              </DialogDescription>
             </div>
             <DecisionBadge decision={record.predicted_class_name} />
           </div>
-        </SheetHeader>
+        </DialogHeader>
 
         {/* Summary info */}
-        <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-sm mb-6">
+        <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-sm">
           <div>
             <dt className="text-muted-foreground text-xs">Gender</dt>
             <dd className="font-medium">{record.gender ?? "\u2014"}</dd>
@@ -64,7 +65,7 @@ export default function FarmerDetailDrawer({ record, open, onClose }: FarmerDeta
           </div>
         </dl>
 
-        <Separator className="mb-6" />
+        <Separator />
 
         {/* Two-column: SHAP chart + RAG explanation */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -91,7 +92,7 @@ export default function FarmerDetailDrawer({ record, open, onClose }: FarmerDeta
             </div>
           </div>
         </div>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }

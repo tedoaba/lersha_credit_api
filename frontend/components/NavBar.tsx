@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { Settings, Plus } from "lucide-react";
 const NAV_LINKS = [
   { href: "/", label: "Dashboard" },
-  { href: "/predict", label: "Predict" },
   { href: "/farmers", label: "Farmers" },
 ];
 

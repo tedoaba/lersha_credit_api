@@ -185,7 +185,7 @@ export default function FarmersPage() {
               <TableBody>
                 {data.records.map((record, i) => {
                   const name =
-                    [record.first_name, record.last_name]
+                    [record.first_name, record.middle_name, record.last_name]
                       .filter(Boolean)
                       .join(" ") || record.farmer_uid;
                   const rowNum = (data.page - 1) * PER_PAGE + i + 1;

@@ -372,11 +372,21 @@ def get_all_results(limit: int = 500, model_name: str | None = None) -> list[dic
         list[dict]: Serialisable list of evaluation records.
     """
     engine = db_engine()
+    farmer_table = config.farmer_data_all
+    base = (
+        f"SELECT cr.*, "  # noqa: S608
+        f"COALESCE(cr.first_name, fd.first_name) AS first_name, "
+        f"COALESCE(cr.middle_name, fd.middle_name) AS middle_name, "
+        f"COALESCE(cr.last_name, fd.last_name) AS last_name, "
+        f"fd.gender "
+        f"FROM candidate_result cr "
+        f"LEFT JOIN {farmer_table} fd ON cr.farmer_uid = fd.farmer_uid"
+    )
     if model_name:
-        query = text("SELECT * FROM candidate_result WHERE model_name = :mn ORDER BY timestamp DESC LIMIT :lim")
+        query = text(f"{base} WHERE cr.model_name = :mn ORDER BY cr.timestamp DESC LIMIT :lim")
         params: dict = {"mn": model_name, "lim": limit}
     else:
-        query = text("SELECT * FROM candidate_result ORDER BY timestamp DESC LIMIT :lim")
+        query = text(f"{base} ORDER BY cr.timestamp DESC LIMIT :lim")
         params = {"lim": limit}
 
     with engine.connect() as conn:
@@ -408,7 +418,8 @@ def get_results_paginated(
 
     if search:
         where_clauses.append(
-            "(cr.first_name ILIKE :search OR cr.last_name ILIKE :search "
+            "(COALESCE(cr.first_name, fd.first_name) ILIKE :search "
+            "OR COALESCE(cr.last_name, fd.last_name) ILIKE :search "
             "OR cr.farmer_uid ILIKE :search)"
         )
         params["search"] = f"%{search}%"
@@ -433,7 +444,12 @@ def get_results_paginated(
     # Data query with pagination
     offset = (page - 1) * per_page
     data_sql = text(
-        f"SELECT cr.*, fd.gender FROM candidate_result cr "  # noqa: S608
+        f"SELECT cr.*, "  # noqa: S608
+        f"COALESCE(cr.first_name, fd.first_name) AS first_name, "
+        f"COALESCE(cr.middle_name, fd.middle_name) AS middle_name, "
+        f"COALESCE(cr.last_name, fd.last_name) AS last_name, "
+        f"fd.gender "
+        f"FROM candidate_result cr "
         f"LEFT JOIN {farmer_table} fd ON cr.farmer_uid = fd.farmer_uid "
         f"{where_sql} "
         f"ORDER BY cr.timestamp DESC LIMIT :per_page OFFSET :offset"
