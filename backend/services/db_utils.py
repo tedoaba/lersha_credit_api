@@ -503,13 +503,13 @@ def get_results_paginated(
 
     where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
-    # Count query
+    # Count distinct farmers (not individual records) for correct pagination
     count_sql = text(
-        f"SELECT COUNT(*) FROM candidate_result cr "  # noqa: S608
+        f"SELECT COUNT(DISTINCT cr.farmer_uid) FROM candidate_result cr "  # noqa: S608
         f"LEFT JOIN {farmer_table} fd ON cr.farmer_uid = fd.farmer_uid "
         f"{where_sql}"
     )
-    # Data query with pagination
+    # Paginate by farmer, then fetch ALL model records for those farmers
     offset = (page - 1) * per_page
     data_sql = text(
         f"SELECT cr.id, cr.farmer_uid, "  # noqa: S608
@@ -522,8 +522,15 @@ def get_results_paginated(
         f"cr.job_id, cr.timestamp, fd.gender "
         f"FROM candidate_result cr "
         f"LEFT JOIN {farmer_table} fd ON cr.farmer_uid = fd.farmer_uid "
-        f"{where_sql} "
-        f"ORDER BY cr.id DESC LIMIT :per_page OFFSET :offset"
+        f"WHERE cr.farmer_uid IN ("
+        f"  SELECT sub.farmer_uid FROM candidate_result sub "
+        f"  LEFT JOIN {farmer_table} sfd ON sub.farmer_uid = sfd.farmer_uid "
+        f"  {where_sql.replace('cr.', 'sub.').replace('fd.', 'sfd.')} "
+        f"  GROUP BY sub.farmer_uid "
+        f"  ORDER BY MAX(sub.id) DESC LIMIT :per_page OFFSET :offset"
+        f") "
+        f"{'AND ' + ' AND '.join(where_clauses) if where_clauses else ''} "
+        f"ORDER BY cr.id DESC"
     )
     params["per_page"] = per_page
     params["offset"] = offset
